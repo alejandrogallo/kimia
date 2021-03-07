@@ -2,11 +2,14 @@ ECL_SRC_PATH = $(abspath lib/src/ecl/$(ECL_COMMIT))
 ECL_DYNAMIC_LIB = $(ECL_BUILD_PATH)/lib/libecl.so
 ECL_STATIC_LIB = $(ECL_BUILD_PATH)/lib/libecl.a
 ECL_GIT_REPOSITORY ?= https://gitlab.com/embeddable-common-lisp/ecl
-ECL_CONFIG_FLAGS = --with-cxx \
-                   --prefix $(ECL_BUILD_PATH) \
+ECL_CONFIG_FLAGS = --prefix $(ECL_BUILD_PATH) \
                    --disable-shared \
                    --disable-soname \
-                   --enable-gmp \
+                   --with-gmp=included \
+                   --with-cmp \
+                   --with-asdf \
+                   --with-dffi=included \
+                   --with-cxx \
 
 $(ECL_SRC_PATH)/configure:
 	mkdir -p $(@D)
