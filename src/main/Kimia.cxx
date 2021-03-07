@@ -52,5 +52,6 @@ int main(int argc, char **argv) {
   }
   LispObject number(lisp::eval_lisp("(makeanumber)"));
   std::cout << "The number is " << number->SF.SFVAL << std::endl;
+
 }
 

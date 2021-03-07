@@ -12,15 +12,14 @@ ECL_COMMIT     ?= master
 ECL_BUILD_PATH ?= $(abspath lib/build/${CONFIG}/ecl/$(ECL_COMMIT))
 ECL_INCLUDE    ?= -I${ECL_BUILD_PATH}/include
 ECL_LIB        ?= -L${ECL_BUILD_PATH}/lib -lecl -leclffi -leclgc -leclatomic
-ECL            ?= ${ECL_BUILD_PATH}/bin/ecl
 
 # Common Lisp Kimia ===========================================================
 CLKIMIA_BUILD_PATH ?= $(abspath lib/build/${CONFIG}/clkimia/)
 CLKIMIA_LIB ?= -L$(CLKIMIA_BUILD_PATH) -lclkimia
 
 # GMP =========================================================================
-GMP_PATH = /nix/store/447im4mh8gmw85dkrvz3facg1jsbn6c7-gmp-6.2.0/lib
-GMP_LIB = -L$(GMP_PATH) -lgmp
+GMP_PATH ?=
+GMP_LIB ?= -L$(GMP_PATH) -lgmp
 
 # BLAS ========================================================================
 BLAS_INCLUDE ?= -I${BLAS_PATH}/include
