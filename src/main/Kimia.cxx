@@ -5,6 +5,10 @@
 
 using LispObject = cl_object;
 
+extern "C" void init_clkimia(cl_object cblock);
+
+
+
 LispObject toLispObject(const std::string &s) {
   return c_string_to_object(s.c_str());
 }
@@ -25,6 +29,8 @@ namespace lisp {
     // Run initrc script
     //eval_lisp("(load \"input.lisp\")");
 
+    ecl_init_module(NULL, init_clkimia);
+
     // Make C++ functions available to Lisp
     //DEFUN("runtime", runtime, 0);
     //DEFUN("set_runtime", set_runtime, 1);
@@ -32,6 +38,7 @@ namespace lisp {
     // Define some Lisp functions to call from C++
     eval_lisp("(defun header () (format t \"Starting program...~%\"))");
     eval_lisp("(defun makeanumber () 3.2)");
+    eval_lisp("(header)");
   }
 }
 
@@ -39,8 +46,11 @@ namespace lisp {
 int main(int argc, char **argv) {
   std::cout << "Hello world" << std::endl;
   lisp::initialize(argc, argv);
-  lisp::eval_lisp("(header)");
-  lisp::eval_lisp("(load \"input.lisp\")");
+  LispObject output(lisp::eval_lisp("(load \"input.lisp\")"));
+  if (output == ECL_NIL) {
+    std::cout << "we are fucked" << std::endl;
+  }
   LispObject number(lisp::eval_lisp("(makeanumber)"));
+  std::cout << "The number is " << number->SF.SFVAL << std::endl;
 }
 

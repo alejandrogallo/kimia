@@ -103,6 +103,7 @@ $(OBJ_PATH)/%.o: $(OBJ_PATH)/%.d
 	${CXX} ${KIMIA_OPTIONS} ${OPTIMIZE} ${INCLUDE_FLAGS} -c src/$*.cxx -o $@
 
 # compile and link executable
+$(BIN_PATH)/${KIMIA_TARGET}: $(IN_PROJECT_DEPENDENCIES_FILES)
 $(BIN_PATH)/${KIMIA_TARGET}: ${OBJ_FILES}
 	$(info [BIN] $@)
 	mkdir -p $(dir $@)

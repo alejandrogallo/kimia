@@ -1,6 +1,6 @@
 include Kimia.mk
 include etc/make/ctf.mk
-include etc/make/ecl.mk
+include etc/make/clkimia.mk
 
 # compiler and linker
 CXX = mpicxx
@@ -27,6 +27,7 @@ LINK_LIBS = \
 ${CTF_LIB} \
 -lquadmath \
 ${ECL_LIB} \
+${CLKIMIA_LIB} \
 -Wl,-Bdynamic \
 ${GMP_LIB} \
 
