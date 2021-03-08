@@ -1,7 +1,7 @@
 CONFIG ?= gcc
 -include config.mk
-include etc/config/${CONFIG}.mk
 include Objects.mk
+include etc/config/${CONFIG}.mk
 
 # goals:
 .DEFAULT_GOAL := all

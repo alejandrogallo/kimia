@@ -2,7 +2,6 @@
   (:nicknames :ka)
   (:export :mk-algorithm
            :algorithm))
-
 (in-package :kimia/algorithm)
 
 (defmacro algorithm ()

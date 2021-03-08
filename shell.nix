@@ -9,6 +9,7 @@ mkShell {
     scalapack
     blas
     gmp
+    gdb
   ];
   SCALAPACK_PATH = "${scalapack}";
   BLAS_PATH = "${blas}";

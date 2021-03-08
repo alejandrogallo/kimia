@@ -1,13 +1,22 @@
 (defpackage :kimia
-  (:use :cl))
+  (:use :cl)
+  (:import-from :ka)
+  (:nicknames :k))
 
 (in-package :kimia)
 
-(defun test ()
-  (print "Hello From Kimia"))
+(defparameter *KIMIA_STEPS* '())
 
-(defmacro wrap-input-script (arg)
+(ka::algorithm)
+
+(defmacro @step (s)
+  `(setf *KIMIA_STEPS* (cons ,s *KIMIA_STEPS*)))
+
+
+(defmacro wrap-input-script (&rest arg)
   `(progn
-     (print "LISP:: START evaluating KIMIA script")
-     ,arg
-     (print "LISP:: DONE evaluating KIMIA")))
+     (import 'kimia)
+     (princ "LISP:: START evaluating KIMIA script")
+     ,@arg
+     (princ "LISP:: DONE evaluating KIMIA")
+     *KIMIA_STEPS*))

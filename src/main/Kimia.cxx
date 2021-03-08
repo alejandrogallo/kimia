@@ -1,6 +1,8 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <fstream>
+#include <iterator>
 #include <ecl/ecl.h>
 
 using LispObject = cl_object;
@@ -26,8 +28,11 @@ namespace lisp {
     cl_boot(argc, argv);
     atexit(cl_shutdown);
 
+
+
     // Run initrc script
     //eval_lisp("(load \"input.lisp\")");
+
 
     ecl_init_module(NULL, init_clkimia);
 
@@ -44,14 +49,44 @@ namespace lisp {
 
 
 int main(int argc, char **argv) {
-  std::cout << "Hello world" << std::endl;
+  std::ifstream ifs("input.lisp");
+  std::string contents;
+  std::getline(ifs, contents, '\0');
+  ifs.close();
+  std::string wrappedContents = "(kimia::wrap-input-script";
+  wrappedContents += "\n";
+  wrappedContents += contents;
+  wrappedContents += ")\n";
+
+
   lisp::initialize(argc, argv);
-  LispObject output(lisp::eval_lisp("(load \"input.lisp\")"));
+
+  LispObject output(lisp::eval_lisp(wrappedContents.c_str()));
+
   if (output == ECL_NIL) {
-    std::cout << "we are fucked" << std::endl;
+    std::cout << "c++: we are fucked" << std::endl;
+  } else if (ECL_LISTP(output)) {
+    std::cout << "c++: LISTP" << std::endl;
+  } else if (ECL_CONSP(output)) {
+    std::cout << "c++: CONSP" << std::endl;
+  } else if (ECL_PATHNAMEP(output)) {
+    std::cout << "c++: IT IS A FUCKING PATHNAME??" << std::endl;
   }
-  LispObject number(lisp::eval_lisp("(makeanumber)"));
-  std::cout << "The number is " << number->SF.SFVAL << std::endl;
+
+  // std::cout <<
+  // ECL_CLASS_OF(output)
+  //           << "\n"
+  //           <<
+  // ECL_CLASS_NAME(output)
+  //           << "\n"
+  //           <<
+  //   (ecl_t_of(output) == t_pathname)
+  //   << "\n";
+  // std::cout << ecl_t_of(output) << std::endl;
+
+  // LispObject number(lisp::eval_lisp("(makeanumber)"));
+  // std::cout << "The number is " << number->SF.SFVAL << std::endl;
+  // std::cout << t_pathname << std::endl;
 
 }
 
