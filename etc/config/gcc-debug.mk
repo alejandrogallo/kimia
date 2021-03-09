@@ -3,7 +3,7 @@ include etc/make/ctf.mk
 include etc/make/clkimia.mk
 
 # compiler and linker
-CXX ?= mpicxx
+CXX = mpicxx
 
 # general and language options (for preprocessing, compiling and linking)
 KIMIA_OPTIONS = \
