@@ -87,9 +87,9 @@ jobs:
           sudo apt-get install -y g++-${{ matrix.version }} g++-${{ matrix.version }}-multilib
           echo "::set-env name=CC::mpicc-${{ matrix.version }}"
           echo "::set-env name=CXX::mpic++-${{ matrix.version }}"
-          mpicxx --version
-          gcc --version
-          $CXX --version
+          export CXX=mpic++-${{matrix.version}}
+          export CC=mpicc-${{matrix.version}}
+          ${CXX} --version
         else
           sudo apt-get install -y clang-${{ matrix.version }} g++-multilib
           echo "::set-env name=CC::clang-${{ matrix.version }}"
