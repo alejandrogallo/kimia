@@ -105,9 +105,9 @@ jobs:
     - name: Install gmp
       run: |
         sudo apt-get install -y libgmp10
-    - name: Install openmpi
-      run: |
-        sudo apt-get install -y libopenmpi3 libopenmpi-dev
+    #- name: Install openmpi
+      #run: |
+        #sudo apt-get install -y libopenmpi1 libopenmpi-dev
     - name: Install libgfortran
       run: |
         sudo apt-get install -y libgfortran-10-dev
