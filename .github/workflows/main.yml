@@ -9,10 +9,11 @@ jobs:
 
     strategy:
       matrix:
+        mpi: [mpich, openmpi]
         include:
           - os: ubuntu-20.04
             name: ubuntu-20.04-gcc-4.8
-            compiler: mpicxx
+            compiler: gcc
             version: "4.8"
 
           - name: ubuntu-20.04-gcc-4.9
