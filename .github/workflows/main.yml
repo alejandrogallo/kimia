@@ -6,6 +6,9 @@ jobs:
   ci:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true # because of the set-env calls
+
 
     strategy:
       matrix:
