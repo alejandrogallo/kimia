@@ -18,7 +18,7 @@ CLKIMIA_BUILD_PATH ?= $(abspath lib/build/${CONFIG}/clkimia/)
 CLKIMIA_LIB ?= -L$(CLKIMIA_BUILD_PATH) -lclkimia
 
 # GMP =========================================================================
-GMP_PATH ?=
+GMP_PATH ?= /usr/lib
 GMP_LIB ?= -L$(GMP_PATH) -lgmp
 
 # BLAS ========================================================================
