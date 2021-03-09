@@ -102,11 +102,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install system dependencies
+    - name: Install gmp
       run: |
         sudo apt-get install -y libgmp10
+    - name: Install openmpi
+      run: |
         sudo apt-get install -y libopenmpi3 libopenmpi-dev
+    - name: Install libgfortran
+      run: |
         sudo apt-get install -y libgfortran-10-dev
+    - name: Install git
+      run: |
         sudo apt-get install -y git
     - name: Make dependencies
       run: make deps CONFIG=gcc-debug
