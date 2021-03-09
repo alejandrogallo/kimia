@@ -12,10 +12,8 @@ jobs:
         include:
           - os: ubuntu-20.04
             name: ubuntu-20.04-gcc-4.8
-            compiler: gcc
+            compiler: mpicxx
             version: "4.8"
-            packages:
-              - openmpi
 
           - name: ubuntu-20.04-gcc-4.9
             os: ubuntu-20.04
