@@ -102,6 +102,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Print compiler version
+      run: ${{matrix.compiler}} --version
     - name: Update packages
       run: sudo apt-get update
     - name: Install gmp
