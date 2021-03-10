@@ -268,3 +268,50 @@ and we can create a step in the following manner
  :out
  :tensor "Whatever")
 #+end_src
+
+** C++ headers from spec
+
+From a spec, we would like to be able
+to create autoamtically a =struct=
+that mirror the spec in order to be passed to other
+functions in c++.
+
+For instance, in the case of the tensor reader, we would
+like to create the following
+
+#+begin_src cpp :eval yes :includes '(<string> <iostream>)
+struct TensorReaderSettings {
+  struct In {
+    enum Mode {binary, text};
+    std::string *file;
+    Mode *mode;
+    In() {
+      mode = new Mode(binary);
+      file = nullptr;
+    }
+  } in;
+  struct Out {
+    std::string *tensor;
+    Out() {
+      tensor = new std::string("file.out");
+    }
+  } out;
+};
+auto p = TensorReaderSettings::In::Mode::text;
+std::cout << p << std::endl;
+TensorReaderSettings s;
+std::cout << *s.out.tensor << std::endl;
+#+end_src
+
+together with a converter function from a =cl_object= into
+a =TensorReaderSettings=
+
+#+begin_src cpp :eval no
+TensorReaderSettings
+cl_object_to_TensorReaderSettings (cl_object *o) {
+}
+#+end_src
+
+
+#+RESULTS:
+: TENSORREADER
