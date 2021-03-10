@@ -142,10 +142,12 @@ Here we should
     `(progn
        (defun ,default-type-fn ()
          '(:name ,name
-           :in ,(mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
-                 in)
-           :out ,(mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
-                  out)))
+           :in ,(reduce (lambda (x y) (concatenate 'list x y))
+                 (mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
+                  in))
+           :out ,(reduce (lambda (x y) (concatenate 'list x y))
+                  (mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
+                   out))))
        (defun ,spec-fun-name ()
          '(:name ,name :in ,in :out ,out))
        (defun ,type-predicate-name (thing)
@@ -182,11 +184,11 @@ For instance we can use this macro in the followig manner
 
 #+begin_src lisp
 (defstep
-    TensorReader
+  TensorReader
   :in
   (:name :file
-   :type (or string fixnum)
-   :default 5
+   :type (or string null)
+   :default nil
    :required t
    :doc "The file where the tensor is located")
   (:name :mode
@@ -196,27 +198,31 @@ For instance we can use this macro in the followig manner
    :doc "The file where the tensor is located")
   :out
   (:name :tensor
-   :type (or string fixnum)
-   :default 5
+   :type string
+   :default "out.tensor"
    :required t
    :doc "The file where the tensor is located"))
 
+(tensorreader-default)
 
 #+end_src
 
 #+RESULTS:
-: TENSORREADER
+| :NAME | TENSORREADER | :IN | (:FILE NIL :MODE :BINARY) | :OUT | (:TENSOR out.tensor) |
 
 and we can make sure that it woks for example as
 
 #+begin_src lisp :results none
-(let (step)
+(let (step default)
   (setq step
         '(:name TensorReader
           :in (:file "asdf"
                :mode :binary)
           :out (:tensor "Integral")))
+  (setq default
+        (tensorreader-default))
 
+  (check-type default tensorreader)
   (check-type step tensorreader))
 #+end_src
 
@@ -264,7 +270,7 @@ and we can create a step in the following manner
 (mk-step
  'TensorReader
  :in
- :file 5
+ :file "amplitudes.dat"
  :mode :binary
  :out
  :tensor "Whatever")
@@ -272,7 +278,7 @@ and we can create a step in the following manner
 (mk-stepq
  TensorReader
  :in
- :file 5
+ :file "amplitudes.dat"
  :mode :binary
  :out
  :tensor "Whatever")
