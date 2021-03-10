@@ -123,6 +123,7 @@ Here we should
                                    setting-spec-list))))
     (typep value (getf spec :type))))
 
+(defparameter *KIMIA-TYPES* '())
 (defmacro defstep (name &rest args)
   ;; checking that name and args are of correct types
   (check-type name (and symbol (not keyword)))
@@ -133,11 +134,18 @@ Here we should
   (let* ((type-predicate-name (intern (format nil "~@:(~a~)-P" name)))
          (type-name (intern (format nil "~@:(~a~)" name)))
          (spec-fun-name (intern (format nil "~@:(~a~)-SPEC" name)))
+         (default-type-fn (intern (format nil "~@:(~a~)-DEFAULT" name)))
          (inout (consume-in-out args))
          (in (car inout))
          (in-keys (mapcar (lambda (x) (getf x :name)) in))
          (out (cadr inout)))
     `(progn
+       (defun ,default-type-fn ()
+         '(:name ,name
+           :in ,(mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
+                 in)
+           :out ,(mapcar (lambda (s) `(,(getf s :name) ,(getf s :default)))
+                  out)))
        (defun ,spec-fun-name ()
          '(:name ,name :in ,in :out ,out))
        (defun ,type-predicate-name (thing)
@@ -162,6 +170,7 @@ Here we should
                                 (pair `(,key ,value)))
                            (step-setting-typep pair spec-out)))
                        -out-keys))))
+       (push ',type-name *KIMIA-TYPES*)
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
 #+end_src
