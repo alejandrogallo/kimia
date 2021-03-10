@@ -1,0 +1,196 @@
+#+title: Kimia
+* =ECL= input language and C++
+
+What should be the input language of a good program?
+Here we will write some notes about this topic.
+
+In principle it is enough to have the same or similar syntax
+as in the old one
+
+* Testing
+#+begin_src lisp :tangle src/clkimia/t.lisp
+(require 'ecl-quicklisp)
+(ecl-quicklisp::install-quicklisp "/tmp/")
+(ql:quickload :fiasco)
+#+end_src
+
+* The Step
+** General definition
+ To set things in perspective, we would like to define a
+ =TensorReader.lisp= file alongside =TensorReader.h= and
+ =TensorReader.cxx=
+ with the specification of this step, it should look something like this
+
+ #+begin_src lisp
+(defstep TensorReader
+  :in
+    (:name file
+     :type (or string null)
+     :default nil
+     :required t
+     :doc "The file where the tensor is located")
+    (:name mask
+     :type (or null (tensor double))
+     :required nil
+     :doc "A mask tensor")
+  :out
+    (:name dimension
+     :type (vector integer)
+     :required nil
+     :doc "The dimension of the read tensor"))
+ #+end_src
+
+ and every item in the =:in= or =:out= fields
+ is therefore a =step-setting-spec=.
+
+** Setting spec
+ It is quite clear this type how it should be defined.
+
+ #+begin_src lisp :noweb-ref step-setting-spec
+(defun step-setting-spec-p (thing)
+  (let ((ty (getf thing :type))
+        (default (getf thing :default))
+        (doc (getf thing :doc))
+        (name (getf thing :name)))
+    (check-type name (and symbol (not keyword)))
+    (check-type doc string)
+    (setq *setting-spec-default* default)
+    ;; TODO: do this without setq
+    (eval `(check-type *setting-spec-default* ,ty))
+    (and name
+         ty
+         (member :default thing)
+         (member :required thing))))
+
+(deftype step-setting-spec ()
+  '(satisfies step-setting-spec-p))
+ #+end_src
+
+ #+RESULTS:
+ : STEP-SETTING-SPEC
+
+ Here therefore we force every spec to have the form
+ #+begin_src lisp
+(:name file
+ :type (or string null)
+ :default nil
+ :required t
+ :doc "The file where the tensor is located")
+ #+end_src
+ and most importantly the type of the =:default= value
+
+
+** Step
+
+A step spec has the following syntax, as we have already
+seen
+
+#+begin_src lisp :eval no
+(defstep
+  :name name-of-the-step
+  :in setting-spec*
+  :out setting-spec*)
+#+end_src
+
+Here we should
+
+#+begin_src lisp
+(defun consume-in-out (lst &optional (tail '()))
+  (let ((first (car lst))
+        (rest (cdr lst)))
+    (cond
+      ((eq first :out) `(,(reverse tail) ,rest))
+      ((eq first :in) (consume-in-out rest tail))
+      ((eq lst '()) `(,(reverse tail) ,rest))
+      (t (consume-in-out rest (cons first tail))))))
+
+(defun get-keys (lst &optional (rest '()))
+  "This function just gets every other element
+  "
+  (check-type lst (or cons null))
+  (let ((head (car lst))
+        (tail (cdr lst)))
+    (case tail
+      ((nil) (reverse rest))
+      (otherwise (get-keys (cdr tail)
+                           (cons head rest))))))
+
+(defun step-setting-typep (setting-pair setting-spec-list)
+  (let* ((key (car setting-pair))
+         (value (getf setting-pair key))
+         (spec (car (remove-if-not (lambda (s)
+                                     (eq key (getf s :name)))
+                                   setting-spec-list))))
+    (typep value (getf spec :type))))
+
+(defmacro defstep (name &rest args)
+  ;; checking that name and args are of correct types
+  (check-type name (and symbol (not keyword)))
+  (let ((inout (consume-in-out args)))
+    (dolist (in-or-out inout)
+      (dolist (setting in-or-out)
+        (check-type setting step-setting-spec))))
+  (let* ((type-predicate-name (intern (format nil "~@:(~a~)-P" name)))
+         (type-name (intern (format nil "~@:(~a~)" name)))
+         (spec-fun-name (intern (format nil "~@:(~a~)-SPEC" name)))
+         (inout (consume-in-out args))
+         (in (car inout))
+         (in-keys (mapcar (lambda (x) (getf x :name)) in))
+         (out (cadr inout)))
+    `(progn
+       (defun ,spec-fun-name ()
+         '(:name ,name :in ,in :out ,out))
+       (defun ,type-predicate-name (thing)
+         (check-type thing cons)
+         (let* ((-name (getf thing :name))
+                (-in (getf thing :in))
+                (-in-keys (get-keys -in))
+                (-out (getf thing :out))
+                (-out-keys (get-keys -out))
+                (spec (,spec-fun-name))
+                (spec-name (getf spec :name))
+                (spec-in (getf spec :in))
+                (spec-out (getf spec :out)))
+           (and (eq -name spec-name)
+                )))
+       (deftype ,type-name ()
+         '(satisfies ,type-predicate-name)))))
+
+(defstep
+  TensorReader
+  :in
+    (:name file
+     :type (or string fixnum)
+     :default 5
+     :required t
+     :doc "The file where the tensor is located")
+    (:name mode
+     :type (member binary text)
+     :default binary
+     :required t
+     :doc "The file where the tensor is located")
+  :out
+    (:name penis
+     :type (or string fixnum)
+     :default 5
+     :required t
+     :doc "The file where the tensor is located"))
+
+;; an internal step should look like this
+
+(setq tr
+ '(:name TensorReader
+   :in (:file "asdf"
+         :mode binary)
+   :out (:name Integral)))
+
+(trace tensorreader-p)
+(check-type tr tensorreader)
+
+
+
+
+#+end_src
+
+#+RESULTS:
+: NIL
