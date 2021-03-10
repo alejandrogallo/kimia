@@ -215,6 +215,11 @@ And we just need to create a function to easier create
 steps
 
 #+begin_src lisp :results none
+(defmacro check-step-type (step)
+  (let ((name (getf step :name)))
+    `(let ((step ',step))
+       (check-type step ,name))))
+
 (defmacro mk-stepq (name &rest args)
   (check-type name symbol)
   (let* ((in-out (consume-in-out args))
@@ -224,15 +229,9 @@ steps
                  :in ,in
                  :out ,out)))
     `(progn
-       (let ((step ',step))
-         (check-type step ,name)
-         step
-         ))))
-
-(defmacro check-step-type (step)
-  (let ((name (getf step :name)))
-    `(let ((step ',step))
-         (check-type step ,name))))
+       (check-step-type ,step)
+       ',step
+       )))
 
 (defun mk-step (name &rest args)
   (check-type name symbol)
@@ -244,8 +243,8 @@ steps
          )
     (setq type name)
     (setq step `(:name ,name
-                       :in ,in
-                       :out ,out))
+                 :in ,in
+                 :out ,out))
     (eval `(check-step-type ,step))
     step))
 #+end_src
