@@ -8,7 +8,7 @@ In principle it is enough to have the same or similar syntax
 as in the old one
 
 * Testing
-#+begin_src lisp :tangle src/clkimia/t.lisp
+#+begin_src lisp :tangle src/clkimia/t.lisp :eval no
 (require 'ecl-quicklisp)
 (ecl-quicklisp::install-quicklisp "/tmp/")
 (ql:quickload :fiasco)
@@ -21,7 +21,7 @@ as in the old one
  =TensorReader.cxx=
  with the specification of this step, it should look something like this
 
- #+begin_src lisp
+ #+begin_src lisp :eval no
 (defstep TensorReader
   :in
     (:name file
@@ -70,7 +70,7 @@ as in the old one
  : STEP-SETTING-SPEC
 
  Here therefore we force every spec to have the form
- #+begin_src lisp
+ #+begin_src lisp :eval no
 (:name :file
  :type (or string null)
  :default nil
@@ -164,7 +164,14 @@ Here we should
                        -out-keys))))
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
+#+end_src
 
+#+RESULTS:
+: DEFSTEP
+
+For instance we can use this macro in the followig manner
+
+#+begin_src lisp
 (defstep
     TensorReader
   :in
@@ -174,8 +181,8 @@ Here we should
    :required t
    :doc "The file where the tensor is located")
   (:name :mode
-   :type (member binary text)
-   :default binary
+   :type (member :binary :text)
+   :default :binary
    :required t
    :doc "The file where the tensor is located")
   :out
@@ -185,24 +192,30 @@ Here we should
    :required t
    :doc "The file where the tensor is located"))
 
-;; an internal step should look like this
 
-(setq tr
-      '(:name TensorReader
-        :in (:file "asdf"
-             :mode binary)
-        :out (:tensor "Integral")))
+#+end_src
 
-;(untrace tensorreader-p)
-(check-type tr tensorreader)
+#+RESULTS:
+: TENSORREADER
+
+and we can make sure that it woks for example as
+
+#+begin_src lisp :results none
+(let (step)
+  (setq step
+        '(:name TensorReader
+          :in (:file "asdf"
+               :mode :binary)
+          :out (:tensor "Integral")))
+
+  (check-type step tensorreader))
 #+end_src
 
 And we just need to create a function to easier create
 steps
 
-#+begin_src lisp
-
-(defmacro mk-step (name &rest args)
+#+begin_src lisp :results none
+(defmacro mk-stepq (name &rest args)
   (check-type name symbol)
   (let* ((in-out (consume-in-out args))
          (in (car in-out))
@@ -212,20 +225,47 @@ steps
                  :out ,out)))
     `(progn
        (let ((step ',step))
-      (check-type step ,name)
-        step
+         (check-type step ,name)
+         step
+         ))))
+
+(defmacro check-step-type (step)
+  (let ((name (getf step :name)))
+    `(let ((step ',step))
+         (check-type step ,name))))
+
+(defun mk-step (name &rest args)
+  (check-type name symbol)
+  (let* ((in-out (consume-in-out args))
+         (in (car in-out))
+         (out (cadr in-out))
+         (type)
+         (step)
          )
-      )
-    ))
+    (setq type name)
+    (setq step `(:name ,name
+                       :in ,in
+                       :out ,out))
+    (eval `(check-step-type ,step))
+    step))
+#+end_src
 
-(setq asdf 65)
+and we can create a step in the following manner
 
+#+begin_src lisp :results none
 (mk-step
+ 'TensorReader
+ :in
+ :file 5
+ :mode :binary
+ :out
+ :tensor "Whatever")
+
+(mk-stepq
  TensorReader
  :in
  :file 5
- :mode binary
+ :mode :binary
  :out
- :tensor Whatever)
-
+ :tensor "Whatever")
 #+end_src
