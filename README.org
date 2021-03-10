@@ -156,7 +156,12 @@ Here we should
                          (let* ((value (getf -in key))
                                 (pair `(,key ,value)))
                            (step-setting-typep pair spec-in)))
-                       -in-keys))))
+                       -in-keys)
+                (every (lambda (key)
+                         (let* ((value (getf -out key))
+                                (pair `(,key ,value)))
+                           (step-setting-typep pair spec-out)))
+                       -out-keys))))
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
 
