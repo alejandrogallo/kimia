@@ -37,6 +37,9 @@ order.
          (format t "~%LISP::DONE evaluating KIMIA~%")
          *KIMIA-STEPS*)))
 #+end_src
+
+#+RESULTS:
+: WRAP-INPUT-SCRIPT
  
 ** The Step
 *** General idea for defining steps
@@ -105,6 +108,9 @@ fields and also to check that the =:default= value if of type =:type=.
   '(satisfies step-setting-spec-p))
   #+end_src
 
+  #+RESULTS:
+  : STEP-SETTING-SPEC
+
 **** Test
 We can quickly check that this code makes what we think
 
@@ -118,6 +124,9 @@ We can quickly check that this code makes what we think
           :doc "The file where the tensor is located"))
   (check-type step step-setting-spec))
 #+end_src
+
+#+RESULTS:
+: NIL
 
 
 *** Defining steps
@@ -159,6 +168,9 @@ and the =:out= part from a list
                            (cons head rest))))))
 
 #+end_src
+
+#+RESULTS:
+: GET-KEYS
 
 We still need the definition of a step.
 
@@ -242,6 +254,9 @@ We still need the definition of a step.
             tensor-reader)
  #+end_src
 
+ #+RESULTS:
+ : NIL
+
  and we can make sure that it woks for example as
 
  #+begin_src lisp :results none :noweb-ref test-kimia.types
@@ -272,6 +287,9 @@ which we can use like
 (let ((step (tensor-reader-default)))
   (eval `(check-step-type ,step)))
 #+end_src
+
+#+RESULTS:
+: NIL
 
 *** Making steps
 
@@ -328,12 +346,12 @@ steps
  :tensor "Whatever")
  #+end_src
 
-*** C++ headers from spec
+** Host code generation
+*** Introduction
 
- From a spec, we would like to be able
- to create autoamtically a =struct=
- that mirror the spec in order to be passed to other
- functions in c++.
+ From a spec, we would like to be able to create autoamtically a
+ =struct= that mirror the spec in order to be passed to other functions
+ in c++.
 
  For instance, in the case of the tensor reader, we would
  like to create the following
@@ -401,7 +419,51 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
  | =(vector F N)=   | =std::array<F, N>*= |
  | =(vector F)=     | =std::vector<F>*=  |
 
- #+begin_src lisp
+*** General structure of a type
+With this information as motivation we can see in general what we have to do
+to use a type from common lisp in the host language.
+- Define type (if it is a built-in there is no need).
+- Define a constructor.
+- Define a declaration.
+
+The C++ programmer may be wondering why we are not considering generic
+programming through the templating metaprogramming infrastructure.
+
+The main reason is that creating generic steps would be an added complication
+that does not really add much value from the c++ side. Let us suppose
+we have a step that might have as a setting a =double= or an =int=
+in a polymorphic way.
+
+It is still possible to write our generic function and then define
+accordin function pointers or =std::function= to the said functions.
+
+#+begin_src cpp :eval yes :includes '(<string> <iostream> <functional>) :main no :results raw
+
+using StepOneSetting_double = double;
+using StepOneSetting_int = int;
+
+template <typename S>
+void runStepOne(S s) { std::cout << s << std::endl; }
+
+std::function<void(StepOneSetting_double)>
+ runStepOne_double = runStepOne<double>;
+std::function<void(StepOneSetting_int)>
+ runStepOne_int = runStepOne<StepOneSetting_int>;
+
+int main () {
+  runStepOne_double(42.001);
+  runStepOne_int(42);
+  return 0;
+}
+#+end_src
+
+#+RESULTS:
+42.001
+42
+
+*** Type definitions
+
+  #+begin_src lisp
 
 (defparameter *kimia-lower-kinded-types*
   '(string
@@ -414,13 +476,16 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
                 (symbol type)
                 (cons (car type)))))
     (funcall (intern (format nil "CL-~@:(~A~)-TO-C++-TYPE" name)) type)))
- #+end_src
+  #+end_src
 
- Some types are high-kinded, in C++ parlance this is akin to
- having template arguments.
- Some types are already defined and some others must be defined.
+  #+RESULTS:
+  : CL-C++-TYPE-CALLER
 
- #+begin_src lisp
+  Some types are high-kinded, in C++ parlance this is akin to
+  having template arguments.
+  Some types are already defined and some others must be defined.
+
+  #+begin_src lisp
 (defun boolean-c++-define (&optional type name) "")
 (defun int-c++-define (&optional type name) "")
 (defun string-c++-define (&optional type name) "")
@@ -429,13 +494,13 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
 (defun vector-c++-define (&optional type name) "")
 (defun member-c++-define (&optional type name)
   )
- #+end_src
+  #+end_src
 
- #+RESULTS:
- : VECTOR-C++-DEFINE
+  #+RESULTS:
+  : MEMBER-C++-DEFINE
 
 
- #+begin_src lisp
+  #+begin_src lisp
 (defun cl-boolean-to-c++-type      (&optional type) "bool")
 (defun cl-member-to-c++-type       (&optional type) "enum")
 (defun cl-int-to-c++-type          (&optional type) "int")
@@ -460,11 +525,14 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
 ;; vector
 ;; string
 ;; pathname
- #+end_src
+  #+end_src
+
+  #+RESULTS:
+  : CL-VECTOR-TO-C++-TYPE
 
 
 
- #+begin_src lisp
+  #+begin_src lisp
 (let ((kimia-types *KIMIA-TYPES*)
       (reader (tensor-reader-default))
       (maybe-string '(or string null))
@@ -477,10 +545,10 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
       (,maybe-string (print "std::string*"))
       (,kimia-types (print "kimia"))
       (t (print "bliad")))))
- #+end_src
+  #+end_src
 
- #+RESULTS:
- : kimia
+  #+RESULTS:
+  : kimia
 
 
 ** Testing
@@ -509,3 +577,6 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
 <<kimia>>
 
  #+end_src
+
+ #+RESULTS:
+ : WRAP-INPUT-SCRIPT
