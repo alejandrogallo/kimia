@@ -22,7 +22,7 @@ as in the old one
  with the specification of this step, it should look something like this
 
  #+begin_src lisp :eval no
-(defstep TensorReader
+(defstep Tensor-Reader
   :in
     (:name file
      :type (or string null)
@@ -135,11 +135,16 @@ Here we should
          (type-name (intern (format nil "~@:(~a~)" name)))
          (spec-fun-name (intern (format nil "~@:(~a~)-SPEC" name)))
          (default-type-fn (intern (format nil "~@:(~a~)-DEFAULT" name)))
+         (c++-name-fn (intern (format nil "~@:(~a~)-C++-NAME" name)))
          (inout (consume-in-out args))
          (in (car inout))
          (in-keys (mapcar (lambda (x) (getf x :name)) in))
          (out (cadr inout)))
     `(progn
+       (defun ,c++-name-fn ()
+         ,(remove-if (lambda (x) (string= x "-"))
+                    (string-capitalize
+                     (string-downcase (string name)))))
        (defun ,default-type-fn ()
          '(:name ,name
            :in ,(reduce (lambda (x y) (concatenate 'list x y))
@@ -184,7 +189,7 @@ For instance we can use this macro in the followig manner
 
 #+begin_src lisp
 (defstep
-  TensorReader
+  tensor-reader
   :in
   (:name :file
    :type (or string null)
@@ -203,27 +208,27 @@ For instance we can use this macro in the followig manner
    :required t
    :doc "The file where the tensor is located"))
 
-(tensorreader-default)
+(tensor-reader-default)
 
 #+end_src
 
 #+RESULTS:
-| :NAME | TENSORREADER | :IN | (:FILE NIL :MODE :BINARY) | :OUT | (:TENSOR out.tensor) |
+| :NAME | TENSOR-READER | :IN | (:FILE NIL :MODE :BINARY) | :OUT | (:TENSOR out.tensor) |
 
 and we can make sure that it woks for example as
 
 #+begin_src lisp :results none
 (let (step default)
   (setq step
-        '(:name TensorReader
+        '(:name Tensor-Reader
           :in (:file "asdf"
                :mode :binary)
           :out (:tensor "Integral")))
   (setq default
-        (tensorreader-default))
+        (tensor-reader-default))
 
-  (check-type default tensorreader)
-  (check-type step tensorreader))
+  (check-type default tensor-reader)
+  (check-type step tensor-reader))
 #+end_src
 
 And we just need to create a function to easier create
@@ -268,7 +273,7 @@ and we can create a step in the following manner
 
 #+begin_src lisp :results none
 (mk-step
- 'TensorReader
+ 'Tensor-Reader
  :in
  :file "amplitudes.dat"
  :mode :binary
@@ -276,7 +281,7 @@ and we can create a step in the following manner
  :tensor "Whatever")
 
 (mk-stepq
- TensorReader
+ Tensor-Reader
  :in
  :file "amplitudes.dat"
  :mode :binary
@@ -318,6 +323,10 @@ TensorReaderSettings s;
 std::cout << *s.out.tensor << std::endl;
 #+end_src
 
+#+RESULTS:
+|        1 |
+| file.out |
+
 together with a converter function from a =cl_object= into
 a =TensorReaderSettings=
 
@@ -327,6 +336,88 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
 }
 #+end_src
 
+And for these structs we need a functions that from a common lisp
+type constructs a declaration inside the struct or somewhere else.
+
+First of all we have to make a choice in order to have a simpler
+more maintainable system.
+We will translate every CL type into a poiter of a related type
+in C++, which means that in principle every type can also be =NULL=,
+or =nullptr= in C++.
+
+There is also the problem of having variables, we should allow
+for symbols to also be passed to any CL variable, they will act as
+named pointers, so that one step can access and modify global data
+that later on other steps can retrieve or further modify.
+
+| CL type          | C++ interpretation |
+|------------------+--------------------|
+| =string=         | =std::string*=     |
+| =(member :a :b)= | =(enum {a, b})*=   |
+| =integer=        | =int*=             |
+| =double-float=   | =double*=          |
+| =single-float=   | =float*=           |
+| =(list F N)=     | =std::array<F, N>*= |
+| =(list F)=       | =std::vector<F>*=  |
+| =(vector F N)=   | =std::array<F, N>*= |
+| =(vector F)=     | =std::vector<F>*=  |
+
+#+begin_src lisp
+
+(defparameter *kimia-lower-kinded-types*
+  '(string
+    integer
+    symbol
+    keyword))
+
+(defun cl-c++-type-caller (type)
+  (let ((name (ecase (type-of type)
+                (symbol type)
+                (cons (car type)))))
+    (funcall (intern (format nil "CL-~@:(~A~)-TO-C++-TYPE" name)) type)))
+
+(defun cl-boolean-to-c++-type      (&optional type) "bool")
+(defun cl-member-to-c++-type       (&optional type) "enum")
+(defun cl-int-to-c++-type          (&optional type) "int")
+(defun cl-string-to-c++-type       (&optional type) "std::string")
+(defun cl-double-float-to-c++-type (&optional type) "double")
+(defun cl-single-float-to-c++-type (&optional type) "single")
+(defun cl-vector-to-c++-type (type)
+  (check-type type cons)
+  (ecase (length type)
+    (2 (let ((field (cadr type)))
+         (format nil "std::vector<~a>" (cl-c++-type-caller field))))
+    (3 "array<F, 5>")))
+
+;; list
+;; int
+;; single-float
+;; double-float
+;; complex
+;; symbol
+;; keyword
+;; hashtable
+;; vector
+;; string
+;; pathname
+#+end_src
+
+
+
+#+begin_src lisp
+(let ((kimia-types *KIMIA-TYPES*)
+      (reader (tensor-reader-default))
+      (maybe-string '(or string null))
+      (s "asdf"))
+  (push 'or kimia-types)
+  (print kimia-types)
+  (eval `(check-step-type ,reader))
+  (eval
+   `(etypecase ',reader
+      (,maybe-string (print "std::string*"))
+      (,kimia-types (print "kimia"))
+      (t (print "bliad")))))
+#+end_src
 
 #+RESULTS:
-: TENSORREADER
+: kimia
