@@ -120,7 +120,7 @@ We can quickly check that this code makes what we think
 #+end_src
 
 
-*** Step
+*** Defining steps
 
  A step spec has the following syntax, as we have already
  seen
@@ -258,15 +258,27 @@ We still need the definition of a step.
   (check-type step tensor-reader))
  #+end_src
 
- And we just need to create a function to easier create
- steps
+A very simple macro to check the type of a step is defined below
 
- #+begin_src lisp :results none
+ #+begin_src lisp :results none :noweb-ref kimia.types
 (defmacro check-step-type (step)
   (let ((name (getf step :name)))
     `(let ((step ',step))
        (check-type step ,name))))
+#+end_src
 
+which we can use like
+#+begin_src lisp :noweb-ref test-kimia.types
+(let ((step (tensor-reader-default)))
+  (eval `(check-step-type ,step)))
+#+end_src
+
+*** Making steps
+
+And we just need to create a function to easier create
+steps
+
+#+begin_src lisp :results none :noweb-ref kimia.types
 (defmacro mk-stepq (name &rest args)
   (check-type name symbol)
   (let* ((in-out (consume-in-out args))
@@ -298,7 +310,7 @@ We still need the definition of a step.
 
  and we can create a step in the following manner
 
- #+begin_src lisp :results none
+ #+begin_src lisp :results none :noweb-ref test-kimia.types
 (mk-step
  'Tensor-Reader
  :in

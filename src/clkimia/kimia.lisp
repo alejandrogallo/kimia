@@ -105,6 +105,37 @@
        (push ',type-name *KIMIA-TYPES*)
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
+(defmacro check-step-type (step)
+  (let ((name (getf step :name)))
+    `(let ((step ',step))
+       (check-type step ,name))))
+(defmacro mk-stepq (name &rest args)
+  (check-type name symbol)
+  (let* ((in-out (consume-in-out args))
+         (in (car in-out))
+         (out (cadr in-out))
+         (step `(:name ,name
+                 :in ,in
+                 :out ,out)))
+    `(progn
+       (check-step-type ,step)
+       ',step
+       )))
+
+(defun mk-step (name &rest args)
+  (check-type name symbol)
+  (let* ((in-out (consume-in-out args))
+         (in (car in-out))
+         (out (cadr in-out))
+         (type)
+         (step)
+         )
+    (setq type name)
+    (setq step `(:name ,name
+                 :in ,in
+                 :out ,out))
+    (eval `(check-step-type ,step))
+    step))
 
 (defpackage :kimia
   (:use :cl)
