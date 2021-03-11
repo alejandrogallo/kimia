@@ -1,52 +1,91 @@
 #+title: Kimia
-* =ECL= input language and C++
+* =CL-KIMIA=
 
-What should be the input language of a good program?
-Here we will write some notes about this topic.
+What should be a good input language for a program?
+A case can be made to choose lisp as an input language,
+and specially Common Lisp as its dialect.
 
-In principle it is enough to have the same or similar syntax
-as in the old one
+The fact that =ECL= can be easily embedded in a C or C++
+program makes it quite attractive for code where quantum chemical
+methods are dealt with or even machine learning codes, where
+the abstraction for defining networks could very well be dealt with
+through powerful lisp macros.
 
-* Testing
-#+begin_src lisp :tangle src/clkimia/t.lisp :eval no
-(require 'ecl-quicklisp)
-(ecl-quicklisp::install-quicklisp "/tmp/")
-(ql:quickload :fiasco)
+This document represents an investigation in this direction,
+and it is written as a literate program, in the hopes that
+it can be embedded in the documentation of an existing program
+using =CL-KIMIA= as a powerful input user interface (IUI).
+
+** Wrapping input
+
+In principle we want the current user to use the input language as a
+purely recipee based language, like a DSL, so we will wrap the users'
+input in a monadic-like interface, where the step will return the
+variable ~*KIMIA-STEPS*~ where the steps of the input are stored in
+order.
+
+#+begin_src lisp :noweb-ref kimia
+(defparameter *KIMIA-STEPS* '())
+
+(defmacro wrap-input-script (&rest arg)
+  `(handler-bind
+       ((error #'invoke-debugger))
+       (progn
+         (in-package :kimia)
+         (format t "~%LISP::START evaluating KIMIA script~%")
+         ,@arg
+         (format t "~%LISP::DONE evaluating KIMIA~%")
+         *KIMIA-STEPS*)))
+#+end_src
+ 
+** The Step
+*** General idea for defining steps
+  To set things in perspective, we would like to define a
+  =TensorReader.lisp= file alongside =TensorReader.h= and
+  =TensorReader.cxx=
+  with the specification of this step, it should look something like this
+
+  #+begin_src lisp :eval no :noweb-ref defstep-tensor-reader-example
+(defstep
+  tensor-reader
+  :in
+  (:name :file
+   :type (or string null)
+   :default nil
+   :required t
+   :doc "The file where the tensor is located")
+  (:name :mode
+   :type (member :binary :text)
+   :default :binary
+   :required t
+   :doc "The file where the tensor is located")
+  :out
+  (:name :tensor
+   :type string
+   :default "out.tensor"
+   :required t
+   :doc "The file where the tensor is located"))
+  #+end_src
+
+  and every item in the =:in= or =:out= fields
+  is therefore a =step-setting-spec=.
+
+*** Setting spec
+We would like to define exactly what a setting specification (setting spec)
+is. As we have seen in the example for the tensor-reader, it should be
+
+#+begin_src lisp :eval no
+(:name :file
+ :type (or string null)
+ :default nil
+ :required t
+ :doc "The file where the tensor is located")
 #+end_src
 
-* The Step
-** General definition
- To set things in perspective, we would like to define a
- =TensorReader.lisp= file alongside =TensorReader.h= and
- =TensorReader.cxx=
- with the specification of this step, it should look something like this
+We define the type =step-setting-spec= to check for the existence of the
+fields and also to check that the =:default= value if of type =:type=.
 
- #+begin_src lisp :eval no
-(defstep Tensor-Reader
-  :in
-    (:name file
-     :type (or string null)
-     :default nil
-     :required t
-     :doc "The file where the tensor is located")
-    (:name mask
-     :type (or null (tensor double))
-     :required nil
-     :doc "A mask tensor")
-  :out
-    (:name dimension
-     :type (vector integer)
-     :required nil
-     :doc "The dimension of the read tensor"))
- #+end_src
-
- and every item in the =:in= or =:out= fields
- is therefore a =step-setting-spec=.
-
-** Setting spec
- It is quite clear this type how it should be defined.
-
- #+begin_src lisp :noweb-ref step-setting-spec
+  #+begin_src lisp :noweb-ref kimia.types
 (defun step-setting-spec-p (thing)
   (let ((ty (getf thing :type))
         (default (getf thing :default))
@@ -64,37 +103,41 @@ as in the old one
 
 (deftype step-setting-spec ()
   '(satisfies step-setting-spec-p))
- #+end_src
+  #+end_src
 
- #+RESULTS:
- : STEP-SETTING-SPEC
+**** Test
+We can quickly check that this code makes what we think
 
- Here therefore we force every spec to have the form
+#+begin_src lisp :noweb-ref test-kimia.types
+(let (step)
+  (setq step
+        '(:name :mode
+          :type (member :binary :text)
+          :default :binary
+          :required t
+          :doc "The file where the tensor is located"))
+  (check-type step step-setting-spec))
+#+end_src
+
+
+*** Step
+
+ A step spec has the following syntax, as we have already
+ seen
+
  #+begin_src lisp :eval no
-(:name :file
- :type (or string null)
- :default nil
- :required t
- :doc "The file where the tensor is located")
- #+end_src
- and most importantly the type of the =:default= value
-
-
-** Step
-
-A step spec has the following syntax, as we have already
-seen
-
-#+begin_src lisp :eval no
 (defstep
   :name name-of-the-step
   :in setting-spec*
   :out setting-spec*)
-#+end_src
+ #+end_src
 
-Here we should
+For ease of writing these definitions we do not wish
+to have proper lists as the value of the =:in= keyword,
+so we need a function parsing exactly the =:in= part
+and the =:out= part from a list
 
-#+begin_src lisp
+ #+begin_src lisp :noweb-ref kimia.types
 (defun consume-in-out (lst &optional (tail '()))
   (let ((first (car lst))
         (rest (cdr lst)))
@@ -115,6 +158,11 @@ Here we should
       (otherwise (get-keys (cdr tail)
                            (cons head rest))))))
 
+#+end_src
+
+We still need the definition of a step.
+
+#+begin_src lisp :noweb-ref kimia.types
 (defun step-setting-typep (setting-pair setting-spec-list)
   (let* ((key (car setting-pair))
          (value (getf setting-pair key))
@@ -180,44 +228,23 @@ Here we should
        (push ',type-name *KIMIA-TYPES*)
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
-#+end_src
+ #+end_src
 
-#+RESULTS:
-: DEFSTEP
+ #+RESULTS:
+ : DEFSTEP
 
-For instance we can use this macro in the followig manner
+ For instance we can use this macro in the followig manner
 
-#+begin_src lisp
-(defstep
-  tensor-reader
-  :in
-  (:name :file
-   :type (or string null)
-   :default nil
-   :required t
-   :doc "The file where the tensor is located")
-  (:name :mode
-   :type (member :binary :text)
-   :default :binary
-   :required t
-   :doc "The file where the tensor is located")
-  :out
-  (:name :tensor
-   :type string
-   :default "out.tensor"
-   :required t
-   :doc "The file where the tensor is located"))
+ #+begin_src lisp :noweb yes :noweb-ref test-kimia.types
+<<defstep-tensor-reader-example>>
 
-(tensor-reader-default)
+(check-type (tensor-reader-default)
+            tensor-reader)
+ #+end_src
 
-#+end_src
+ and we can make sure that it woks for example as
 
-#+RESULTS:
-| :NAME | TENSOR-READER | :IN | (:FILE NIL :MODE :BINARY) | :OUT | (:TENSOR out.tensor) |
-
-and we can make sure that it woks for example as
-
-#+begin_src lisp :results none
+ #+begin_src lisp :results none :noweb-ref test-kimia.types
 (let (step default)
   (setq step
         '(:name Tensor-Reader
@@ -229,12 +256,12 @@ and we can make sure that it woks for example as
 
   (check-type default tensor-reader)
   (check-type step tensor-reader))
-#+end_src
+ #+end_src
 
-And we just need to create a function to easier create
-steps
+ And we just need to create a function to easier create
+ steps
 
-#+begin_src lisp :results none
+ #+begin_src lisp :results none
 (defmacro check-step-type (step)
   (let ((name (getf step :name)))
     `(let ((step ',step))
@@ -267,11 +294,11 @@ steps
                  :out ,out))
     (eval `(check-step-type ,step))
     step))
-#+end_src
+ #+end_src
 
-and we can create a step in the following manner
+ and we can create a step in the following manner
 
-#+begin_src lisp :results none
+ #+begin_src lisp :results none
 (mk-step
  'Tensor-Reader
  :in
@@ -287,19 +314,19 @@ and we can create a step in the following manner
  :mode :binary
  :out
  :tensor "Whatever")
-#+end_src
+ #+end_src
 
-** C++ headers from spec
+*** C++ headers from spec
 
-From a spec, we would like to be able
-to create autoamtically a =struct=
-that mirror the spec in order to be passed to other
-functions in c++.
+ From a spec, we would like to be able
+ to create autoamtically a =struct=
+ that mirror the spec in order to be passed to other
+ functions in c++.
 
-For instance, in the case of the tensor reader, we would
-like to create the following
+ For instance, in the case of the tensor reader, we would
+ like to create the following
 
-#+begin_src cpp :eval yes :includes '(<string> <iostream>)
+ #+begin_src cpp :eval yes :includes '(<string> <iostream>)
 struct TensorReaderSettings {
   struct In {
     enum Mode {binary, text};
@@ -321,48 +348,48 @@ auto p = TensorReaderSettings::In::Mode::text;
 std::cout << p << std::endl;
 TensorReaderSettings s;
 std::cout << *s.out.tensor << std::endl;
-#+end_src
+ #+end_src
 
-#+RESULTS:
-|        1 |
-| file.out |
+ #+RESULTS:
+ |        1 |
+ | file.out |
 
-together with a converter function from a =cl_object= into
-a =TensorReaderSettings=
+ together with a converter function from a =cl_object= into
+ a =TensorReaderSettings=
 
-#+begin_src cpp :eval no
+ #+begin_src cpp :eval no
 TensorReaderSettings
 cl_object_to_TensorReaderSettings (cl_object *o) {
 }
-#+end_src
+ #+end_src
 
-And for these structs we need a functions that from a common lisp
-type constructs a declaration inside the struct or somewhere else.
+ And for these structs we need a functions that from a common lisp
+ type constructs a declaration inside the struct or somewhere else.
 
-First of all we have to make a choice in order to have a simpler
-more maintainable system.
-We will translate every CL type into a poiter of a related type
-in C++, which means that in principle every type can also be =NULL=,
-or =nullptr= in C++.
+ First of all we have to make a choice in order to have a simpler
+ more maintainable system.
+ We will translate every CL type into a poiter of a related type
+ in C++, which means that in principle every type can also be =NULL=,
+ or =nullptr= in C++.
 
-There is also the problem of having variables, we should allow
-for symbols to also be passed to any CL variable, they will act as
-named pointers, so that one step can access and modify global data
-that later on other steps can retrieve or further modify.
+ There is also the problem of having variables, we should allow
+ for symbols to also be passed to any CL variable, they will act as
+ named pointers, so that one step can access and modify global data
+ that later on other steps can retrieve or further modify.
 
-| CL type          | C++ interpretation |
-|------------------+--------------------|
-| =string=         | =std::string*=     |
-| =(member :a :b)= | =(enum {a, b})*=   |
-| =integer=        | =int*=             |
-| =double-float=   | =double*=          |
-| =single-float=   | =float*=           |
-| =(list F N)=     | =std::array<F, N>*= |
-| =(list F)=       | =std::vector<F>*=  |
-| =(vector F N)=   | =std::array<F, N>*= |
-| =(vector F)=     | =std::vector<F>*=  |
+ | CL type          | C++ interpretation |
+ |------------------+--------------------|
+ | =string=         | =std::string*=     |
+ | =(member :a :b)= | =(enum {a, b})*=   |
+ | =integer=        | =int*=             |
+ | =double-float=   | =double*=          |
+ | =single-float=   | =float*=           |
+ | =(list F N)=     | =std::array<F, N>*= |
+ | =(list F)=       | =std::vector<F>*=  |
+ | =(vector F N)=   | =std::array<F, N>*= |
+ | =(vector F)=     | =std::vector<F>*=  |
 
-#+begin_src lisp
+ #+begin_src lisp
 
 (defparameter *kimia-lower-kinded-types*
   '(string
@@ -375,7 +402,28 @@ that later on other steps can retrieve or further modify.
                 (symbol type)
                 (cons (car type)))))
     (funcall (intern (format nil "CL-~@:(~A~)-TO-C++-TYPE" name)) type)))
+ #+end_src
 
+ Some types are high-kinded, in C++ parlance this is akin to
+ having template arguments.
+ Some types are already defined and some others must be defined.
+
+ #+begin_src lisp
+(defun boolean-c++-define (&optional type name) "")
+(defun int-c++-define (&optional type name) "")
+(defun string-c++-define (&optional type name) "")
+(defun single-float-c++-define (&optional type name) "")
+(defun double-float-c++-define (&optional type name) "")
+(defun vector-c++-define (&optional type name) "")
+(defun member-c++-define (&optional type name)
+  )
+ #+end_src
+
+ #+RESULTS:
+ : VECTOR-C++-DEFINE
+
+
+ #+begin_src lisp
 (defun cl-boolean-to-c++-type      (&optional type) "bool")
 (defun cl-member-to-c++-type       (&optional type) "enum")
 (defun cl-int-to-c++-type          (&optional type) "int")
@@ -400,11 +448,11 @@ that later on other steps can retrieve or further modify.
 ;; vector
 ;; string
 ;; pathname
-#+end_src
+ #+end_src
 
 
 
-#+begin_src lisp
+ #+begin_src lisp
 (let ((kimia-types *KIMIA-TYPES*)
       (reader (tensor-reader-default))
       (maybe-string '(or string null))
@@ -417,7 +465,35 @@ that later on other steps can retrieve or further modify.
       (,maybe-string (print "std::string*"))
       (,kimia-types (print "kimia"))
       (t (print "bliad")))))
+ #+end_src
+
+ #+RESULTS:
+ : kimia
+
+
+** Testing
+#+begin_src lisp :tangle src/clkimia/t.lisp :eval no :noweb no-export
+(in-package :kimia)
+
+(in-package :kimia.types)
+<<test-kimia.types>>
+
 #+end_src
 
-#+RESULTS:
-: kimia
+** The code
+ #+begin_src lisp :noweb no-export :tangle src/clkimia/kimia.lisp
+(defpackage :kimia.types
+  (:use :cl)
+  (:nicknames :kt))
+(in-package :kimia.types)
+
+<<kimia.types>>
+
+(defpackage :kimia
+  (:use :cl)
+  (:nicknames :k))
+(in-package :kimia)
+
+<<kimia>>
+
+ #+end_src
