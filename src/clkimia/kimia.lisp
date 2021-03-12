@@ -216,6 +216,31 @@
                                    setting-spec-list))))
     (typep value (getf spec :type))))
 
+(defun step-setting-step-to-struct-spec (step-name args)
+  " Input is
+    'Tensor-Reader (:in setting-spec* :out setting-spec*)
+  "
+  (let* ((inout (consume-in-out args))
+         (in-struct `(struct nil ,(mapcar
+                                   (lambda (kp)
+                                     `(,(getf kp :name)
+                                       ,(getf kp :type)))
+                                   (car inout))))
+         (out-struct `(struct nil ,(mapcar
+                                   (lambda (kp)
+                                     `(,(getf kp :name)
+                                       ,(getf kp :type)))
+                                   (cadr inout)))))
+    `(struct ,step-name ((:in ,in-struct)
+                         (:out ,out-struct)))))
+
+(defun step-deftype-c++ (step-name args)
+  (let ((step-struct (step-setting-step-to-struct-spec step-name args)))
+    (eval `(deftype-c++ ,step-name
+      :translate (lambda (ty) (translate-c++ ,step-struct))
+      :declare-var (lambda (ty vn) (declare-var-c++ ,step-struct vn))
+      :define (lambda (ty) (define-c++ ,step-struct))))))
+
 (defparameter *KIMIA-TYPES* '())
 (defmacro defstep (name &rest args)
   ;; checking that name and args are of correct types
@@ -234,10 +259,7 @@
          (in-keys (mapcar (lambda (x) (getf x :name)) in))
          (out (cadr inout)))
     `(progn
-       (defun ,c++-name-fn ()
-         ,(remove-if (lambda (x) (string= x "-"))
-                    (string-capitalize
-                     (string-downcase (string name)))))
+       (step-deftype-c++ ',name ',args)
        (defun ,default-type-fn ()
          '(:name ,name
            :in ,(reduce (lambda (x y) (concatenate 'list x y))

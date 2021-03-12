@@ -1,6 +1,6 @@
 #+title: Kimia
 * =CL-KIMIA=
-
+** Introduction
 What should be a good input language for a program?
 A case can be made to choose lisp as an input language,
 and specially Common Lisp as its dialect.
@@ -49,19 +49,18 @@ order.
   with the specification of this step, it should look something like this
 
   #+begin_src lisp :eval no :noweb-ref defstep-tensor-reader-example
-(defstep
-  tensor-reader
+(defstep tensor-reader
   :in
   (:name :file
-   :type (or string null)
-   :default nil
+   :type string
+   :default "input.dat"
    :required t
    :doc "The file where the tensor is located")
   (:name :mode
    :type (member :binary :text)
    :default :binary
    :required t
-   :doc "The file where the tensor is located")
+   :doc "The encoding and format that the tensor is written in")
   :out
   (:name :tensor
    :type string
@@ -183,6 +182,31 @@ We still need the definition of a step.
                                    setting-spec-list))))
     (typep value (getf spec :type))))
 
+(defun step-setting-step-to-struct-spec (step-name args)
+  " Input is
+    'Tensor-Reader (:in setting-spec* :out setting-spec*)
+  "
+  (let* ((inout (consume-in-out args))
+         (in-struct `(struct nil ,(mapcar
+                                   (lambda (kp)
+                                     `(,(getf kp :name)
+                                       ,(getf kp :type)))
+                                   (car inout))))
+         (out-struct `(struct nil ,(mapcar
+                                   (lambda (kp)
+                                     `(,(getf kp :name)
+                                       ,(getf kp :type)))
+                                   (cadr inout)))))
+    `(struct ,step-name ((:in ,in-struct)
+                         (:out ,out-struct)))))
+
+(defun step-deftype-c++ (step-name args)
+  (let ((step-struct (step-setting-step-to-struct-spec step-name args)))
+    (eval `(deftype-c++ ,step-name
+      :translate (lambda (ty) (translate-c++ ,step-struct))
+      :declare-var (lambda (ty vn) (declare-var-c++ ,step-struct vn))
+      :define (lambda (ty) (define-c++ ,step-struct))))))
+
 (defparameter *KIMIA-TYPES* '())
 (defmacro defstep (name &rest args)
   ;; checking that name and args are of correct types
@@ -201,10 +225,7 @@ We still need the definition of a step.
          (in-keys (mapcar (lambda (x) (getf x :name)) in))
          (out (cadr inout)))
     `(progn
-       (defun ,c++-name-fn ()
-         ,(remove-if (lambda (x) (string= x "-"))
-                    (string-capitalize
-                     (string-downcase (string name)))))
+       (step-deftype-c++ ',name ',args)
        (defun ,default-type-fn ()
          '(:name ,name
            :in ,(reduce (lambda (x y) (concatenate 'list x y))
@@ -247,7 +268,7 @@ We still need the definition of a step.
 
  For instance we can use this macro in the followig manner
 
- #+begin_src lisp :noweb yes :noweb-ref test-kimia.types
+ #+begin_src lisp :noweb yes :noweb-ref test-kimia.types :eval no
 <<defstep-tensor-reader-example>>
 
 (check-type (tensor-reader-default)
@@ -259,7 +280,7 @@ We still need the definition of a step.
 
  and we can make sure that it woks for example as
 
- #+begin_src lisp :results none :noweb-ref test-kimia.types
+ #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
 (let (step default)
   (setq step
         '(:name Tensor-Reader
@@ -283,7 +304,7 @@ A very simple macro to check the type of a step is defined below
 #+end_src
 
 which we can use like
-#+begin_src lisp :noweb-ref test-kimia.types
+#+begin_src lisp :noweb-ref test-kimia.types :eval no
 (let ((step (tensor-reader-default)))
   (eval `(check-step-type ,step)))
 #+end_src
@@ -328,7 +349,7 @@ steps
 
  and we can create a step in the following manner
 
- #+begin_src lisp :results none :noweb-ref test-kimia.types
+ #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
 (mk-step
  'Tensor-Reader
  :in
@@ -466,6 +487,26 @@ int main () {
 #+end_src
 
 #+RESULTS:
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
+42.001
+42
 42.001
 42
 
@@ -614,9 +655,9 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x13fbe60> :DECLARE-VAR
-:  #<bytecompiled-closure #<bytecompiled-function 0x21b0410>> :DEFINE
-:  #<bytecompiled-function 0x13fbe10>)
+: (:TRANSLATE #<bytecompiled-function 0x219ea00> :DECLARE-VAR
+:  #<bytecompiled-closure #<bytecompiled-function 0x3067960>> :DEFINE
+:  #<bytecompiled-function 0x219e9b0>)
 
 *** The struct
 
@@ -661,12 +702,11 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function TRANSLATE-STRUCT-C++ 0x1b76500>
-:  :DECLARE-VAR #<bytecompiled-function DECLARE-VAR-STRUCT-C++ 0x1b76550> :DEFINE
-:  #<bytecompiled-function DEFINE-STRUCT-C++ 0x1b764b0>)
+: (:TRANSLATE #<bytecompiled-function 0x219e7d0> :DECLARE-VAR
+:  #<bytecompiled-function 0x219e500> :DEFINE #<bytecompiled-function 0x219e4b0>)
 
 *** The enums
-
+    
 #+begin_src lisp :noweb-ref kimia.codegen
 (defun translate-enum-c++ (ty)
   (let* ((ty-name (cadr ty))
@@ -713,8 +753,8 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x1b762d0> :DECLARE-VAR
-:  #<bytecompiled-function 0x1b761e0> :DEFINE #<bytecompiled-function 0x1b76190>)
+: (:TRANSLATE #<bytecompiled-function 0x1d81a50> :DECLARE-VAR
+:  #<bytecompiled-function 0x1d81a00> :DEFINE #<bytecompiled-function 0x1d819b0>)
 
 
 
@@ -749,7 +789,7 @@ and something a little bit more challenging
   #+end_src
 
   #+RESULTS:
-  : kimia
+  : bliad
 
 
 ** Testing
@@ -781,4 +821,4 @@ and something a little bit more challenging
  #+end_src
 
  #+RESULTS:
- : WRAP-INPUT-SCRIPT
+ : COMMON-LISP-USER::WRAP-INPUT-SCRIPT
