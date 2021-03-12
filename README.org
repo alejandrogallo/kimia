@@ -450,7 +450,15 @@ std::function<void(StepOneSetting_double)>
 std::function<void(StepOneSetting_int)>
  runStepOne_int = runStepOne<StepOneSetting_int>;
 
+struct Connection {
+  enum {IN, OUT} in;
+  enum {Five, Six} out;
+};
+
 int main () {
+  Connection c;
+  c.in = Connection::IN;
+  c.out = Connection::Five;
   runStepOne_double(42.001);
   runStepOne_int(42);
   return 0;
@@ -485,20 +493,320 @@ int main () {
   having template arguments.
   Some types are already defined and some others must be defined.
 
-  #+begin_src lisp
-(defun boolean-c++-define (&optional type name) "")
-(defun int-c++-define (&optional type name) "")
-(defun string-c++-define (&optional type name) "")
-(defun single-float-c++-define (&optional type name) "")
-(defun double-float-c++-define (&optional type name) "")
-(defun vector-c++-define (&optional type name) "")
-(defun member-c++-define (&optional type name)
+- define (type type-name) :: define for the first time.
+  - For built-ins in c and c++ this is just empty
+  - For structs and enums, if no type-name is given it should be defined in place,
+    which is useful for declaring variables.
+- declare-var (type type-name var-name) :: declare a variable
+  - For built-ins in c and c++ this is just =<type> <var-name>=
+  - For structs and enums if no type-name is given then we define the type in place
+    If a =type-name= is given then the sentence should be =<type-name> <var-name>=.
+
+- give translation (this also for nameless structs/enums/unions gives the whole struct)
+- give variable declaration (which works well for translation)
+- give definition which should fail in the case of nameless things, or just give emtpy.
+  and give emtpy also for builtins.
+
+#+begin_src lisp :eval no
+(deftype-c++ (array F N)
+  :translate "int"
+  :declare-var (lambda (type type-name var-name)
+             (format nil "~a ~a;"
+                     (int-c++-translate int)
+                     (string var-name)
+                     ))
+  :define ""
+  :generic (F N))
+#+end_src
+
+and something a little bit more challenging
+
+#+begin_src lisp :eval no
+(deftype-c++
+  ;; this must be a valid type
+  vector
+  :translate "int"
+  :declare-var (lambda (type type-name var-name)
+             (check-type type cons)
+             (assert (eq (length type) 2))
+             (format nil
+                     "vector<~a> ~a;"
+                     (translation-c++ (cadr type))
+                     var-name)
+             )
+  :define "")
+#+end_src
+
+
+#+begin_src lisp
+(defparameter *KIMIA-TYPES* '())
+
+(defmacro c++-declare-var-fn-default (translate)
+  `(lambda (ty vn)
+     (format nil "~a ~a;" (funcall ,translate ty) vn)))
+
+
+(defmacro deftype-c++ (type &key
+                              translate
+                              (declare-var nil)
+                              (define nil)
+                              (satisfies nil)
+                              (generic nil))
+  (let* ((type-name (etypecase type
+                      (cons (car type))
+                      (symbol type)))
+         (type-c++-name (intern (format nil "~A-C++" type-name)))
+         (fun-or-scalar (lambda (thing)
+                          (etypecase thing
+                            (cons (eval thing))
+                            (compiled-function thing)
+                            ((or null string) (eval `(lambda (&optional args)
+                                                       ,thing))))))
+         (translate (funcall fun-or-scalar translate))
+         (declare-var (or declare-var
+                          (c++-declare-var-fn-default translate))))
+    `(progn
+       (setq ,type-c++-name
+             '(:translate ,translate
+               :declare-var ,(funcall fun-or-scalar declare-var)
+               :define ,(funcall fun-or-scalar define))))
+    ))
+
+(defmacro translate-c++ (ty)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :translate) ',ty)))
+
+(defmacro define-c++ (ty)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :define) ',ty)))
+
+(defmacro declare-var-c++ (ty vn)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :declare-var) ',ty ',vn)))
+#+end_src
+
+#+RESULTS:
+: DECLARE-VAR-C++
+
+#+begin_src lisp
+(deftype-c++ int
+  :translate "int")
+
+(deftype-c++ double
+  :translate "double")
+
+(deftype-c++ string
+  :translate "std::string")
+
+(deftype-c++ double-float
+  :translate "double")
+
+(deftype-c++ single-float
+  :translate "float")
+
+(deftype-c++ float
+  :translate "float")
+
+(deftype-c++ (vector F)
+  :translate (lambda (ty)
+               (format nil "std::vector< ~a >"
+                       (eval `(translate-c++ ,(cadr ty)))))
+)
+
+(deftype-c++ (array F N)
+  :translate (lambda (ty)
+               (format nil "std::array< ~a, ~a >"
+                       (eval `(translate-c++ ,(cadr ty)))
+                       (caddr ty)))
+  :declare-var nil)
+
+#+end_src
+
+#+RESULTS:
+: (:TRANSLATE #<bytecompiled-function 0x1b76370> :DECLARE-VAR
+:  #<bytecompiled-closure #<bytecompiled-function 0x1b76a00>> :DEFINE
+:  #<bytecompiled-function 0x1b762d0>)
+
+#+begin_src lisp
+
+(defun endl () (format nil "~%"))
+
+(defun declare-var-struct-c++ (ty vn)
+  (let* ((name (cadr ty))
+         (fields (caddr ty))
+         (pre-var (etypecase name
+                    (null (translate-struct-c++ ty))
+                    (t (string-capitalize name)))))
+    (format nil "~a ~a;" pre-var vn)))
+
+
+(defun translate-struct-c++ (ty)
+  (let* ((ty-name (cadr ty))
+         (name (if ty-name (string-capitalize ty-name) ""))
+         (fields (caddr ty)))
+    (concatenate 'string
+                 "struct " (or name "")
+                 " {" (endl)
+                 (eval
+                  `(concatenate 'string
+                                ,@(loop for kp in fields
+                                        collect
+                                        (format nil
+                                                "  ~a~a"
+                                                (eval
+                                                 `(declare-var-c++
+                                                   ,(cadr kp)
+                                                   ,(car kp)))
+                                                (endl)))))
+                 "}")))
+
+(defun define-struct-c++ (ty)
+  (format nil "~a;" (translate-struct-c++ ty)))
+
+(deftype-c++ (struct name args)
+  :translate #'translate-struct-c++
+  :declare-var #'declare-var-struct-c++
+  :define #'define-struct-c++)
+
+#+end_src
+
+And enums
+
+#+begin_src lisp
+(defun translate-enum-c++ (ty)
+  (let* ((ty-name (cadr ty))
+         (name (if ty-name (string-capitalize ty-name) ""))
+         (fields (cddr ty)))
+    (concatenate 'string
+                 "enum " (or name "")
+                 " {" (endl)
+                 (eval
+                  `(concatenate 'string
+                                ,@(loop for kp in fields
+                                        collect
+                                        (format nil
+                                                "  ~a,~a"
+                                                kp
+                                                (endl)))))
+                 "}")))
+
+(defun declare-var-enum-c++ (ty vn)
+  (let* ((name (cadr ty))
+         (fields (caddr ty))
+         (pre-var (etypecase name
+                    (null (translate-enum-c++ ty))
+                    (t (string-capitalize name)))))
+    (format nil "~a ~a;" pre-var vn)))
+
+(defun define-enum-c++ (ty)
+  (format nil "~a;" (translate-enum-c++ ty)))
+
+(deftype-c++ (enum name args)
+  :translate #'translate-enum-c++
+  :declare-var #'declare-var-enum-c++
+  :define #'define-enum-c++)
+#+end_src
+
+
+#+RESULTS:
+: (:TRANSLATE #<bytecompiled-function TRANSLATE-ENUM-C++ 0x1b76230> :DECLARE-VAR
+:  #<bytecompiled-function DECLARE-VAR-ENUM-C++ 0x1b76b90> :DEFINE
+:  #<bytecompiled-function DEFINE-ENUM-C++ 0x2473690>)
+
+#+begin_src c++
+struct Connection {
+  INT PORT;
+  STRING NAME;
+  struct  {
+    INT IP4;
+  } IP;
+}
+
+struct Tensor-Reader {
+  struct  {
+    std::string FILE;
+    std::string MODE;
+  } IN;
+  struct  {
+    std::string TENSOR-PATH;
+    struct  {
+      int ORDER;
+      std::vector< int > LENS;
+    } LENS;
+  } OUT;
+};
+#+end_src
+
+
+
+
+#+begin_src lisp
+(defun boolean-c++-define (&optional type type-name) "")
+(defun int-c++-define (&optional type type-name) "")
+(defun string-c++-define (&optional type type-name) "std::string")
+(defun single-float-c++-define (&optional type type-name) "")
+(defun double-float-c++-define (&optional type type-name) "")
+(defun vector-c++-define (&optional type type-name) "")
+(defun struct-c++-define (&optional type type-name)
+  (concatenate 'string
+               "struct " (or type-name "") (format nil " {~%")
+               (format nil "  ~a ~a;~%"
+                       (string-downcase (string 'string))
+                       (string :name))
+               (format nil "};")))
+
+(defun boolean-c++-declare-val (&optional type type-name)
+  "")
+(defun int-c++-declare-val (&optional type type-name)
+  "")
+(defun string-c++-declare-val (&optional type type-name)
+  "std::string")
+(defun single-float-c++-declare-val (&optional type type-name)
+  "")
+(defun double-float-c++-declare-val (&optional type type-name)
+  "")
+(defun vector-c++-declare-val (&optional type type-name)
+  "")
+
+(defun struct-emit-definition-body (type)
+  (concatenate 'string
+               (format nil "{~%")
+               "}"))
+
+(struct-emit-definition-body
+'(:penis string :whatever int)
+)
+
+(princ
+ (struct-c++-define
+  '(:penis string :whatever int) "Penis"
   )
-  #+end_src
+ )
+#+end_src
 
   #+RESULTS:
   : MEMBER-C++-DEFINE
 
+- list
+- int
+- single-float
+- double-float
+- complex
+- symbol
+- keyword
+- hashtable
+- vector
+- string
+- pathname
 
   #+begin_src lisp
 (defun cl-boolean-to-c++-type      (&optional type) "bool")
@@ -514,17 +822,6 @@ int main () {
          (format nil "std::vector<~a>" (cl-c++-type-caller field))))
     (3 "array<F, 5>")))
 
-;; list
-;; int
-;; single-float
-;; double-float
-;; complex
-;; symbol
-;; keyword
-;; hashtable
-;; vector
-;; string
-;; pathname
   #+end_src
 
   #+RESULTS:
