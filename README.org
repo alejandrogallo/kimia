@@ -67,6 +67,7 @@ order.
    :default "out.tensor"
    :required t
    :doc "The file where the tensor is located"))
+
   #+end_src
 
   and every item in the =:in= or =:out= fields
@@ -428,17 +429,40 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
  named pointers, so that one step can access and modify global data
  that later on other steps can retrieve or further modify.
 
- | CL type          | C++ interpretation |
+
+*** List of types
+
+ | Built-in CL type | C++ interpretation |
  |------------------+--------------------|
- | =string=         | =std::string*=     |
- | =(member :a :b)= | =(enum {a, b})*=   |
- | =integer=        | =int*=             |
- | =double-float=   | =double*=          |
- | =single-float=   | =float*=           |
- | =(list F N)=     | =std::array<F, N>*= |
- | =(list F)=       | =std::vector<F>*=  |
- | =(vector F N)=   | =std::array<F, N>*= |
- | =(vector F)=     | =std::vector<F>*=  |
+ | =string=         | =std::string=      |
+ | =(member :a :b)= | =enum {a, b}=      |
+ | =integer=        | =int=              |
+ | =double-float=   | =double=           |
+ | =single-float=   | =float=            |
+ | =(list F N)=     | =std::array<F, N>= |
+ | =(list F)=       | =std::vector<F>=   |
+ | =(vector F N)=   | =std::array<F, N>= |
+ | =(vector F)=     | =std::vector<F>=   |
+ | =(complex F)=    | =std::complex<F>=  |
+
+ | Kimia CL type                        | C++ intepretation               |
+ |--------------------------------------+---------------------------------|
+ | =(or symbol null)= through =(-> a)=  | =a*=                            |
+ | =(struct [name] ((:name int) ... ))= | =struct [Name] {int name; ...}= |
+ | =(enum [name] :a :b ))=              | =enum [Name] { A, B, }=         |
+
+- [X] vector
+- [X] symbol
+- [X] string
+- [X] single-float
+- [X] keyword
+- [X] int
+- [X] double-float
+- [ ] list
+- [ ] hashtable
+- [ ] complex
+
+
 
 *** General structure of a type
 With this information as motivation we can see in general what we have to do
@@ -486,29 +510,6 @@ int main () {
 }
 #+end_src
 
-#+RESULTS:
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
-42.001
-42
 
 *** Type definitions idea
 
@@ -655,9 +656,9 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x219ea00> :DECLARE-VAR
-:  #<bytecompiled-closure #<bytecompiled-function 0x3067960>> :DEFINE
-:  #<bytecompiled-function 0x219e9b0>)
+: (:TRANSLATE #<bytecompiled-function 0x21e9280> :DECLARE-VAR
+:  #<bytecompiled-closure #<bytecompiled-function 0x30d2640>> :DEFINE
+:  #<bytecompiled-function 0x21e9230>)
 
 *** The struct
 
@@ -702,8 +703,8 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x219e7d0> :DECLARE-VAR
-:  #<bytecompiled-function 0x219e500> :DEFINE #<bytecompiled-function 0x219e4b0>)
+: (:TRANSLATE #<bytecompiled-function 0x3067910> :DECLARE-VAR
+:  #<bytecompiled-function 0x30677d0> :DEFINE #<bytecompiled-function 0x3067780>)
 
 *** The enums
     
@@ -753,43 +754,9 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x1d81a50> :DECLARE-VAR
-:  #<bytecompiled-function 0x1d81a00> :DEFINE #<bytecompiled-function 0x1d819b0>)
+: (:TRANSLATE #<bytecompiled-function 0x30671e0> :DECLARE-VAR
+:  #<bytecompiled-function 0x3067190> :DEFINE #<bytecompiled-function 0x26eb9b0>)
 
-
-
-*** List of types
-
-- list
-- int
-- single-float
-- double-float
-- complex
-- symbol
-- keyword
-- hashtable
-- vector
-- string
-- pathname
-
-
-  #+begin_src lisp
-(let ((kimia-types *KIMIA-TYPES*)
-      (reader (tensor-reader-default))
-      (maybe-string '(or string null))
-      (s "asdf"))
-  (push 'or kimia-types)
-  (print kimia-types)
-  (eval `(check-step-type ,reader))
-  (eval
-   `(etypecase ',reader
-      (,maybe-string (print "std::string*"))
-      (,kimia-types (print "kimia"))
-      (t (print "bliad")))))
-  #+end_src
-
-  #+RESULTS:
-  : bliad
 
 
 ** Testing

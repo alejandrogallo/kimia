@@ -9,19 +9,18 @@
           :required t
           :doc "The file where the tensor is located"))
   (check-type step step-setting-spec))
-(defstep
-  tensor-reader
+(defstep tensor-reader
   :in
   (:name :file
-   :type (or string null)
-   :default nil
+   :type string
+   :default "input.dat"
    :required t
    :doc "The file where the tensor is located")
   (:name :mode
    :type (member :binary :text)
    :default :binary
    :required t
-   :doc "The file where the tensor is located")
+   :doc "The encoding and format that the tensor is written in")
   :out
   (:name :tensor
    :type string
