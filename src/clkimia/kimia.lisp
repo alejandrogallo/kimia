@@ -3,6 +3,174 @@
   (:nicknames :kt))
 (in-package :kimia.types)
 
+(defun endl () (format nil "~%"))
+
+(defun c++-type-name (thing)
+  (remove-if (lambda (x) (string= x "-"))
+             (string-capitalize
+              (string-downcase thing))))
+
+(defun c++-var-name (thing)
+  (nstring-downcase
+   (remove-if (lambda (x) (string= x "-"))
+              (string-capitalize
+               (string-downcase thing)))
+   :start 0
+   :end 1))
+
+(defparameter *KIMIA-TYPES* '())
+
+(defmacro c++-declare-var-fn-default (translate)
+  `(lambda (ty vn)
+     (format nil "~a ~a;"
+             (funcall ,translate ty)
+             (c++-var-name vn))))
+
+
+(defmacro deftype-c++ (type &key
+                              translate
+                              (declare-var nil)
+                              (define nil)
+                              (satisfies nil)
+                              (generic nil))
+  (let* ((type-name (etypecase type
+                      (cons (car type))
+                      (symbol type)))
+         (type-c++-name (intern (format nil "~A-C++" type-name)))
+         (fun-or-scalar (lambda (thing)
+                          (etypecase thing
+                            (cons (eval thing))
+                            (compiled-function thing)
+                            ((or null string) (eval `(lambda (&optional args)
+                                                       ,thing))))))
+         (translate (funcall fun-or-scalar translate))
+         (declare-var (or declare-var
+                          (c++-declare-var-fn-default translate))))
+    `(progn
+       (defparameter ,type-c++-name nil)
+       (setq ,type-c++-name
+             '(:translate ,translate
+               :declare-var ,(funcall fun-or-scalar declare-var)
+               :define ,(funcall fun-or-scalar define))))
+    ))
+
+(defmacro translate-c++ (ty)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :translate) ',ty)))
+
+(defmacro define-c++ (ty)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :define) ',ty)))
+
+(defmacro declare-var-c++ (ty vn)
+  (let* ((ty-name (etypecase ty
+                    (cons (car ty))
+                    (symbol ty)))
+         (ty-c++ (intern (format nil "~a-C++" ty-name))))
+    `(funcall (getf ,ty-c++ :declare-var) ',ty ',vn)))
+(deftype-c++ int :translate "int")
+(deftype-c++ double :translate "double")
+(deftype-c++ string :translate "std::string")
+(deftype-c++ double-float :translate "double")
+(deftype-c++ single-float :translate "float")
+(deftype-c++ float :translate "float")
+(deftype-c++ boolean :translate "bool")
+
+(deftype-c++ (vector F)
+  :translate (lambda (ty)
+               (format nil "std::vector< ~a >"
+                       (eval `(translate-c++ ,(cadr ty))))))
+
+(deftype-c++ (array F N)
+  :translate (lambda (ty)
+               (format nil "std::array< ~a, ~a >"
+                       (eval `(translate-c++ ,(cadr ty)))
+                       (caddr ty))))
+(defun translate-struct-c++ (ty)
+  (let* ((ty-name (cadr ty))
+         (name (if ty-name (c++-type-name ty-name) ""))
+         (fields (caddr ty)))
+    (concatenate 'string
+                 "struct " (or name "")
+                 " {" (endl)
+                 (eval
+                  `(concatenate 'string
+                                ,@(loop for kp in fields
+                                        collect
+                                        (format nil
+                                                "  ~a~a"
+                                                (eval
+                                                 `(declare-var-c++
+                                                   ,(cadr kp)
+                                                   ,(car kp)))
+                                                (endl)))))
+                 "}")))
+
+(defun declare-var-struct-c++ (ty vn)
+  (let* ((name (cadr ty))
+         (pre-var (etypecase name
+                    (null (translate-struct-c++ ty))
+                    (t (c++-type-name name)))))
+    (format nil "~a ~a;"
+            pre-var
+            (c++-var-name vn))))
+
+(defun define-struct-c++ (ty)
+  (format nil "~a;" (translate-struct-c++ ty)))
+
+(deftype-c++ (struct name args)
+  :translate (lambda (ty) (translate-struct-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
+  :define (lambda (ty) (define-struct-c++ ty)))
+
+(defun translate-enum-c++ (ty)
+  (let* ((ty-name (cadr ty))
+         (name (if ty-name (c++-type-name ty-name) ""))
+         (fields (cddr ty)))
+    (concatenate 'string
+                 "enum "
+                 (or name "")
+                 " {"
+                 (endl)
+                 (eval
+                  `(concatenate 'string
+                                ,@(loop for kp in fields
+                                        collect
+                                        (format nil
+                                                "  ~a,~a"
+                                                kp
+                                                (endl)))))
+                 "}")))
+
+(defun declare-var-enum-c++ (ty vn)
+  (let* ((name (cadr ty))
+         (fields (caddr ty))
+         (pre-var (etypecase name
+                    (null (translate-enum-c++ ty))
+                    (t (string-capitalize name)))))
+    (format nil "~a ~a;" pre-var (c++-var-name vn))))
+
+(defun define-enum-c++ (ty)
+  (format nil "~a;" (translate-enum-c++ ty)))
+
+(deftype-c++ (enum name args)
+  :translate (lambda (ty) (translate-enum-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-enum-c++ ty vn))
+  :define (lambda (ty) (define-enum-c++ ty)))
+
+(deftype-c++ (member args)
+  :translate (lambda (ty)
+               (translate-enum-c++ `(enum nil ,@(cdr ty))))
+  :declare-var (lambda (ty vn)
+                 (declare-var-enum-c++ `(enum nil ,@(cdr ty)) vn))
+  :define (lambda (ty)
+            (define-enum-c++ `(enum nil ,@(cdr ty)))))
 (defun step-setting-spec-p (thing)
   (let ((ty (getf thing :type))
         (default (getf thing :default))

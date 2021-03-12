@@ -469,25 +469,7 @@ int main () {
 42.001
 42
 
-*** Type definitions
-
-  #+begin_src lisp
-
-(defparameter *kimia-lower-kinded-types*
-  '(string
-    integer
-    symbol
-    keyword))
-
-(defun cl-c++-type-caller (type)
-  (let ((name (ecase (type-of type)
-                (symbol type)
-                (cons (car type)))))
-    (funcall (intern (format nil "CL-~@:(~A~)-TO-C++-TYPE" name)) type)))
-  #+end_src
-
-  #+RESULTS:
-  : CL-C++-TYPE-CALLER
+*** Type definitions idea
 
   Some types are high-kinded, in C++ parlance this is akin to
   having template arguments.
@@ -519,8 +501,11 @@ int main () {
   :generic (F N))
 #+end_src
 
+*** Define c++ types
 
-#+begin_src lisp
+Naming conventions in C++
+
+#+begin_src lisp :noweb-ref kimia.codegen
 (defun endl () (format nil "~%"))
 
 (defun c++-type-name (thing)
@@ -543,7 +528,7 @@ int main () {
 
 and something a little bit more challenging
 
-#+begin_src lisp
+#+begin_src lisp :noweb-ref kimia.codegen
 (defparameter *KIMIA-TYPES* '())
 
 (defmacro c++-declare-var-fn-default (translate)
@@ -573,6 +558,7 @@ and something a little bit more challenging
          (declare-var (or declare-var
                           (c++-declare-var-fn-default translate))))
     `(progn
+       (defparameter ,type-c++-name nil)
        (setq ,type-c++-name
              '(:translate ,translate
                :declare-var ,(funcall fun-or-scalar declare-var)
@@ -604,7 +590,9 @@ and something a little bit more challenging
 #+RESULTS:
 : DECLARE-VAR-C++
 
-#+begin_src lisp
+*** Definition for simple C++ types
+
+#+begin_src lisp :noweb-ref kimia.codegen
 (deftype-c++ int :translate "int")
 (deftype-c++ double :translate "double")
 (deftype-c++ string :translate "std::string")
@@ -626,22 +614,13 @@ and something a little bit more challenging
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x1b76640> :DECLARE-VAR
-:  #<bytecompiled-closure #<bytecompiled-function 0x2a96460>> :DEFINE
-:  #<bytecompiled-function 0x1b765f0>)
+: (:TRANSLATE #<bytecompiled-function 0x13fbe60> :DECLARE-VAR
+:  #<bytecompiled-closure #<bytecompiled-function 0x21b0410>> :DEFINE
+:  #<bytecompiled-function 0x13fbe10>)
 
-#+begin_src lisp
+*** The struct
 
-(defun declare-var-struct-c++ (ty vn)
-  (let* ((name (cadr ty))
-         (pre-var (etypecase name
-                    (null (translate-struct-c++ ty))
-                    (t (c++-type-name name)))))
-    (format nil "~a ~a;"
-            pre-var
-            (c++-var-name vn))))
-
-
+#+begin_src lisp :noweb-ref kimia.codegen
 (defun translate-struct-c++ (ty)
   (let* ((ty-name (cadr ty))
          (name (if ty-name (c++-type-name ty-name) ""))
@@ -662,24 +641,33 @@ and something a little bit more challenging
                                                 (endl)))))
                  "}")))
 
+(defun declare-var-struct-c++ (ty vn)
+  (let* ((name (cadr ty))
+         (pre-var (etypecase name
+                    (null (translate-struct-c++ ty))
+                    (t (c++-type-name name)))))
+    (format nil "~a ~a;"
+            pre-var
+            (c++-var-name vn))))
+
 (defun define-struct-c++ (ty)
   (format nil "~a;" (translate-struct-c++ ty)))
 
 (deftype-c++ (struct name args)
-  :translate #'translate-struct-c++
-  :declare-var #'declare-var-struct-c++
-  :define #'define-struct-c++)
+  :translate (lambda (ty) (translate-struct-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
+  :define (lambda (ty) (define-struct-c++ ty)))
 
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function TRANSLATE-STRUCT-C++ 0x1bbd1e0>
-:  :DECLARE-VAR #<bytecompiled-function DECLARE-VAR-STRUCT-C++ 0x1bbd230> :DEFINE
-:  #<bytecompiled-function DEFINE-STRUCT-C++ 0x1bbd460>)
+: (:TRANSLATE #<bytecompiled-function TRANSLATE-STRUCT-C++ 0x1b76500>
+:  :DECLARE-VAR #<bytecompiled-function DECLARE-VAR-STRUCT-C++ 0x1b76550> :DEFINE
+:  #<bytecompiled-function DEFINE-STRUCT-C++ 0x1b764b0>)
 
-And enums
+*** The enums
 
-#+begin_src lisp
+#+begin_src lisp :noweb-ref kimia.codegen
 (defun translate-enum-c++ (ty)
   (let* ((ty-name (cadr ty))
          (name (if ty-name (c++-type-name ty-name) ""))
@@ -711,9 +699,9 @@ And enums
   (format nil "~a;" (translate-enum-c++ ty)))
 
 (deftype-c++ (enum name args)
-  :translate #'translate-enum-c++
-  :declare-var #'declare-var-enum-c++
-  :define #'define-enum-c++)
+  :translate (lambda (ty) (translate-enum-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-enum-c++ ty vn))
+  :define (lambda (ty) (define-enum-c++ ty)))
 
 (deftype-c++ (member args)
   :translate (lambda (ty)
@@ -728,71 +716,9 @@ And enums
 : (:TRANSLATE #<bytecompiled-function 0x1b762d0> :DECLARE-VAR
 :  #<bytecompiled-function 0x1b761e0> :DEFINE #<bytecompiled-function 0x1b76190>)
 
-#+begin_src cpp :eval yes :includes '(<string> <vector> <iostream> <functional>)
-struct TensorReader {
-  struct  {
-    std::string file;
-    Mode mode;
-  } in;
-  struct  {
-    std::string tensorPath;
-    struct  {
-      int order;
-      std::vector< int > lens;
-    } lens;
-  } out;
-};
-#+end_src
 
 
-
-
-#+begin_src lisp
-(defun boolean-c++-define (&optional type type-name) "")
-(defun int-c++-define (&optional type type-name) "")
-(defun string-c++-define (&optional type type-name) "std::string")
-(defun single-float-c++-define (&optional type type-name) "")
-(defun double-float-c++-define (&optional type type-name) "")
-(defun vector-c++-define (&optional type type-name) "")
-(defun struct-c++-define (&optional type type-name)
-  (concatenate 'string
-               "struct " (or type-name "") (format nil " {~%")
-               (format nil "  ~a ~a;~%"
-                       (string-downcase (string 'string))
-                       (string :name))
-               (format nil "};")))
-
-(defun boolean-c++-declare-val (&optional type type-name)
-  "")
-(defun int-c++-declare-val (&optional type type-name)
-  "")
-(defun string-c++-declare-val (&optional type type-name)
-  "std::string")
-(defun single-float-c++-declare-val (&optional type type-name)
-  "")
-(defun double-float-c++-declare-val (&optional type type-name)
-  "")
-(defun vector-c++-declare-val (&optional type type-name)
-  "")
-
-(defun struct-emit-definition-body (type)
-  (concatenate 'string
-               (format nil "{~%")
-               "}"))
-
-(struct-emit-definition-body
-'(:penis string :whatever int)
-)
-
-(princ
- (struct-c++-define
-  '(:penis string :whatever int) "Penis"
-  )
- )
-#+end_src
-
-  #+RESULTS:
-  : MEMBER-C++-DEFINE
+*** List of types
 
 - list
 - int
@@ -805,26 +731,6 @@ struct TensorReader {
 - vector
 - string
 - pathname
-
-  #+begin_src lisp
-(defun cl-boolean-to-c++-type      (&optional type) "bool")
-(defun cl-member-to-c++-type       (&optional type) "enum")
-(defun cl-int-to-c++-type          (&optional type) "int")
-(defun cl-string-to-c++-type       (&optional type) "std::string")
-(defun cl-double-float-to-c++-type (&optional type) "double")
-(defun cl-single-float-to-c++-type (&optional type) "single")
-(defun cl-vector-to-c++-type (type)
-  (check-type type cons)
-  (ecase (length type)
-    (2 (let ((field (cadr type)))
-         (format nil "std::vector<~a>" (cl-c++-type-caller field))))
-    (3 "array<F, 5>")))
-
-  #+end_src
-
-  #+RESULTS:
-  : CL-VECTOR-TO-C++-TYPE
-
 
 
   #+begin_src lisp
@@ -862,6 +768,7 @@ struct TensorReader {
   (:nicknames :kt))
 (in-package :kimia.types)
 
+<<kimia.codegen>>
 <<kimia.types>>
 
 (defpackage :kimia

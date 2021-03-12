@@ -42,10 +42,8 @@
 
   (check-type default tensor-reader)
   (check-type step tensor-reader))
-
 (let ((step (tensor-reader-default)))
   (eval `(check-step-type ,step)))
-
 (mk-step
  'Tensor-Reader
  :in
