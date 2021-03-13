@@ -28,6 +28,7 @@
    :required t
    :doc "The file where the tensor is located"))
 
+
 (check-type (tensor-reader-default)
             tensor-reader)
 (let (step default)

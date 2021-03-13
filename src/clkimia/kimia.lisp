@@ -74,7 +74,7 @@
                     (symbol ty)))
          (ty-c++ (intern (format nil "~a-C++" ty-name))))
     `(funcall (getf ,ty-c++ :declare-var) ',ty ',vn)))
-(deftype-c++ int :translate "int")
+(deftype-c++ integer :translate "int")
 (deftype-c++ double :translate "double")
 (deftype-c++ string :translate "std::string")
 (deftype-c++ double-float :translate "double")
@@ -171,31 +171,34 @@
                  (declare-var-enum-c++ `(enum nil ,@(cdr ty)) vn))
   :define (lambda (ty)
             (define-enum-c++ `(enum nil ,@(cdr ty)))))
-(defun step-setting-spec-p (thing)
-  (let ((ty (getf thing :type))
-        (default (getf thing :default))
-        (doc (getf thing :doc))
-        (name (getf thing :name)))
-    (check-type name keyword)
-    (check-type doc string)
-    (setq *setting-spec-default* default)
-    ;; TODO: do this without setq
-    (eval `(check-type *setting-spec-default* ,ty))
-    (and name
-         ty
-         (member :default thing)
-         (member :required thing))))
+(defparameter *setting-spec-default* nil)
+(eval-when (:compile-toplevel)
+  (defun step-setting-spec-p (thing)
+    (let ((ty (getf thing :type))
+          (default (getf thing :default))
+          (doc (getf thing :doc))
+          (name (getf thing :name)))
+      (check-type name keyword)
+      (check-type doc string)
+      (setq *setting-spec-default* default)
+      ;; TODO: do this without setq
+      (eval `(check-type *setting-spec-default* ,ty))
+      (and name
+           ty
+           (member :default thing)
+           (member :required thing)))))
 
 (deftype step-setting-spec ()
   '(satisfies step-setting-spec-p))
-(defun consume-in-out (lst &optional (tail '()))
-  (let ((first (car lst))
-        (rest (cdr lst)))
-    (cond
-      ((eq first :out) `(,(reverse tail) ,rest))
-      ((eq first :in) (consume-in-out rest tail))
-      ((eq lst '()) `(,(reverse tail) ,rest))
-      (t (consume-in-out rest (cons first tail))))))
+(eval-when (:compile-toplevel :load-toplevel)
+  (defun consume-in-out (lst &optional (tail '()))
+    (let ((first (car lst))
+          (rest (cdr lst)))
+      (cond
+        ((eq first :out) `(,(reverse tail) ,rest))
+        ((eq first :in) (consume-in-out rest tail))
+        ((eq lst '()) `(,(reverse tail) ,rest))
+        (t (consume-in-out rest (cons first tail)))))))
 
 (defun get-keys (lst &optional (rest '()))
   "This function just gets every other element
@@ -253,10 +256,8 @@
          (type-name (intern (format nil "~@:(~a~)" name)))
          (spec-fun-name (intern (format nil "~@:(~a~)-SPEC" name)))
          (default-type-fn (intern (format nil "~@:(~a~)-DEFAULT" name)))
-         (c++-name-fn (intern (format nil "~@:(~a~)-C++-NAME" name)))
          (inout (consume-in-out args))
          (in (car inout))
-         (in-keys (mapcar (lambda (x) (getf x :name)) in))
          (out (cadr inout)))
     `(progn
        (step-deftype-c++ ',name ',args)
