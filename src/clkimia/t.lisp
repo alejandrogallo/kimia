@@ -1,6 +1,5 @@
 (in-package :kimia)
 
-(in-package :kimia.types)
 (let (step)
   (setq step
         '(:name :mode

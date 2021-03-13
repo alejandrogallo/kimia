@@ -1,4 +1,4 @@
-(in-package :kimia.types)
+(in-package :kimia)
 
 (defstep tensor-reader-spec
   :in

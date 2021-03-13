@@ -1,7 +1,7 @@
-(defpackage :kimia.types
+(defpackage :kimia
   (:use :cl)
-  (:nicknames :kt))
-(in-package :kimia.types)
+  (:nicknames :k))
+(in-package :kimia)
 
 (defun endl () (format nil "~%"))
 
@@ -327,20 +327,17 @@
                  :out ,out))
     (eval `(check-step-type ,step))
     step))
-
-(defpackage :kimia
-  (:use :cl)
-  (:nicknames :k))
-(in-package :kimia)
-
 (defparameter *KIMIA-STEPS* '())
 
 (defmacro wrap-input-script (&rest arg)
   `(handler-bind
        ((error #'invoke-debugger))
-       (progn
-         (in-package :kimia)
-         (format t "~%LISP::START evaluating KIMIA script~%")
-         ,@arg
-         (format t "~%LISP::DONE evaluating KIMIA~%")
-         *KIMIA-STEPS*)))
+     (in-package :kimia)
+     (progn
+       (format t "~%LISP::START evaluating KIMIA script~%")
+       ,@arg
+       (format t "~%LISP::DONE evaluating KIMIA~%")
+       kimia::*KIMIA-STEPS*)))
+
+(defmacro >> (&rest args)
+  `(push (mk-stepq ,@args) *KIMIA-STEPS*))

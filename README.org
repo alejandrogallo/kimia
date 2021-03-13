@@ -30,12 +30,15 @@ order.
 (defmacro wrap-input-script (&rest arg)
   `(handler-bind
        ((error #'invoke-debugger))
-       (progn
-         (in-package :kimia)
-         (format t "~%LISP::START evaluating KIMIA script~%")
-         ,@arg
-         (format t "~%LISP::DONE evaluating KIMIA~%")
-         *KIMIA-STEPS*)))
+     (in-package :kimia)
+     (progn
+       (format t "~%LISP::START evaluating KIMIA script~%")
+       ,@arg
+       (format t "~%LISP::DONE evaluating KIMIA~%")
+       kimia::*KIMIA-STEPS*)))
+
+(defmacro >> (&rest args)
+  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
 #+end_src
 
 #+RESULTS:
@@ -764,26 +767,19 @@ and something a little bit more challenging
 #+begin_src lisp :tangle src/clkimia/t.lisp :eval no :noweb no-export
 (in-package :kimia)
 
-(in-package :kimia.types)
 <<test-kimia.types>>
 
 #+end_src
 
 ** The code
  #+begin_src lisp :noweb no-export :tangle src/clkimia/kimia.lisp
-(defpackage :kimia.types
-  (:use :cl)
-  (:nicknames :kt))
-(in-package :kimia.types)
-
-<<kimia.codegen>>
-<<kimia.types>>
-
 (defpackage :kimia
   (:use :cl)
   (:nicknames :k))
 (in-package :kimia)
 
+<<kimia.codegen>>
+<<kimia.types>>
 <<kimia>>
 
  #+end_src
