@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 #include <map>
 #include <iostream>
 #include <sstream>
@@ -7,9 +8,37 @@
 #include <cwchar>
 #include <ecl/ecl.h>
 
-using LispObject = cl_object;
-
 extern "C" void init_clkimia(cl_object cblock);
+extern cl_object struct_get_fields(cl_object);
+
+struct A { int a; double b; };
+
+size_t cl_object_to_int (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new int(ecl_to_int(o));
+}
+
+size_t cl_object_to_double (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new double(ecl_to_double(o));
+}
+
+size_t cl_object_to_float (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new float(ecl_to_float(o));
+}
+
+size_t cl_object_to_char (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new char(ecl_to_char(o));
+}
+
+size_t cl_object_to_bool (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new bool(ecl_to_bool(o));
+}
+
+size_t cl_object_to_struct_A
+  (const cl_object o, const std::vector<size_t> &args) {
+  return (size_t)new A{*(int*)args[0], *(double*)args[1]};
+}
+
+
 
 std::string wrapInProgn(const std::string &code) {
   std::string result{"(progn\n"};
@@ -20,7 +49,7 @@ std::string wrapInProgn(const std::string &code) {
 
 namespace lisp {
 
-  LispObject toLispObject(const std::string &s) {
+  cl_object toLispObject(const std::string &s) {
     return c_string_to_object(s.c_str());
   }
 
@@ -145,9 +174,14 @@ int main(int argc, char **argv) {
 
 
   lisp::initialize(argc, argv);
-  //LispObject output(lisp::eval_lisp(wrappedContents.c_str()));
+  //cl_object output(lisp::eval_lisp(wrappedContents.c_str()));
 
-  LispObject output, env, value;
+  std::vector<size_t> ids;
+  cl_object i(lisp::eval_lisp("51"));
+  int pi(*(int*)cl_object_to_int(i, ids));
+  std::cout << pi << std::endl;
+
+  cl_object output, env, value;
 
   output = cl_safe_eval(c_string_to_object(wrappedContents.c_str()), Cnil, Cnil);
   //output = cl_safe_eval(c_string_to_object(contents.c_str()), env, value);
@@ -155,9 +189,14 @@ int main(int argc, char **argv) {
   //std::cout << "env: " << describeEclObject(env) << std::endl;
   // std::cout << "value: " << describeEclObject(value) << std::endl;
 
-  std::cout << "GOT: ";
+  std::cout << "GOT: \n";
   cl_print(1, output);
-  std::cout << "" << std::endl;
+  cl_print(1, cl_car(output));
+  cl_print(1, cl_car(cl_car(output)));
+  cl_print(1, cl_getf(2, cl_car(output), lisp::eval_lisp(":name")));
+
+  std::cout << "\n<<<GOT>>>" << std::endl;
+
   // ecl_to_double
   //std::cout << describeEclObject(env) << std::endl;
   //std::cout << describeEclObject(value) << std::endl;
@@ -187,7 +226,7 @@ int main(int argc, char **argv) {
     std::cout << "appartenly  : " << describeEclObject(output) << std::endl;
   }
 
-  // LispObject number(lisp::eval_lisp("(makeanumber)"));
+  // cl_object number(lisp::eval_lisp("(makeanumber)"));
   // std::cout << "The number is " << number->SF.SFVAL << std::endl;
   // std::cout << t_pathname << std::endl;
 

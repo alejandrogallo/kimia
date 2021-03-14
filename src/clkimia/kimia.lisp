@@ -171,6 +171,8 @@
                  (declare-var-enum-c++ `(enum nil ,@(cdr ty)) vn))
   :define (lambda (ty)
             (define-enum-c++ `(enum nil ,@(cdr ty)))))
+(defun struct-get-fields (s)
+  (car s))
 (defparameter *setting-spec-default* nil)
 (eval-when (:compile-toplevel)
   (defun step-setting-spec-p (thing)

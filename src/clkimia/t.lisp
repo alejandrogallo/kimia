@@ -1,5 +1,8 @@
 (in-package :kimia)
 
+(assert (string= (c++-type-name 'tensor-reader) "TensorReader"))
+(assert (string= (c++-type-name "TeNsor-ReAder") "TensorReader"))
+(assert (string= (c++-var-name "TeNsor-ReAder") "tensorReader"))
 (let (step)
   (setq step
         '(:name :mode
