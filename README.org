@@ -37,8 +37,8 @@ order.
        (format t "~%LISP::DONE evaluating KIMIA~%")
        kimia::*KIMIA-STEPS*)))
 
-(defmacro >> (&rest args)
-  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
+;(defmacro >> (&rest args)
+;  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
 #+end_src
 
 #+RESULTS:
@@ -121,11 +121,11 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
  | =(vector F)=     | =std::vector<F>=   |
  | =(complex F)=    | =std::complex<F>=  |
 
- | Kimia CL type                        | C++ intepretation               |
- |--------------------------------------+---------------------------------|
- | =(or symbol null)= through =(-> a)=  | =a*=                            |
- | =(struct [name] ((:name int) ... ))= | =struct [Name] {int name; ...}= |
- | =(enum [name] :a :b ))=              | =enum [Name] { A, B, }=         |
+ | Kimia CL type                                                    | C++ intepretation               |
+ |------------------------------------------------------------------+---------------------------------|
+ | =(or symbol null)= through =(-> a)=                              | =a*=                            |
+ | =(struct [name] [list of generic variables] ((:name int) ... ))= | =struct [Name] {int name; ...}= |
+ | =(enum [name] :a :b ))=                                          | =enum [Name] { A, B, }=         |
 
 - [X] vector
 - [X] symbol
@@ -138,55 +138,6 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
 - [ ] hashtable
 - [ ] complex
 
-
-
-*** General structure of a type
-With this information as motivation we can see in general what we have to do
-to use a type from common lisp in the host language.
-- Define type (if it is a built-in there is no need).
-- Define a constructor.
-- Define a declaration.
-
-The C++ programmer may be wondering why we are not considering generic
-programming through the templating metaprogramming infrastructure.
-
-The main reason is that creating generic steps would be an added complication
-that does not really add much value from the c++ side. Let us suppose
-we have a step that might have as a setting a =double= or an =int=
-in a polymorphic way.
-
-It is still possible to write our generic function and then define
-accordin function pointers or =std::function= to the said functions.
-
-
-
-#+begin_src cpp :eval yes :includes '(<string> <iostream> <functional>) :main no :results raw
-
-using StepOneSetting_double = double;
-using StepOneSetting_int = int;
-
-template <typename S>
-void runStepOne(S s) { std::cout << s << std::endl; }
-
-std::function<void(StepOneSetting_double)>
- runStepOne_double = runStepOne<double>;
-std::function<void(StepOneSetting_int)>
- runStepOne_int = runStepOne<StepOneSetting_int>;
-
-struct Connection {
-  enum {IN, OUT} in;
-  enum {Five, Six} out;
-};
-
-int main () {
-  Connection c;
-  c.in = Connection::IN;
-  c.out = Connection::Five;
-  runStepOne_double(42.001);
-  runStepOne_int(42);
-  return 0;
-}
-#+end_src
 
 
 *** Type definitions idea
@@ -203,27 +154,36 @@ int main () {
   - For built-ins in c and c++ this is just =<type> <var-name>=
   - For structs and enums if no type-name is given then we define the type in place
     If a =type-name= is given then the sentence should be =<type-name> <var-name>=.
-
-- give translation (this also for nameless structs/enums/unions gives the whole struct)
-- give variable declaration (which works well for translation)
-- give definition which should fail in the case of nameless things, or just give emtpy.
-  and give emtpy also for builtins.
+- translation ::
+  (this also for nameless structs/enums/unions gives the whole struct)
+- caster-snippet ::
+  This is a snippet of code that should convert in the host language
+  a cl_object into a memory address pointing to the object in question.
+- caster-name ::
+  The name of the caster function
 
 #+begin_src lisp :eval no
-(deftype-c++ (array F N)
-  :translate "int"
-  :declare-var (lambda (type type-name var-name)
-             (format nil "~a ~a;"
-                     (int-c++-translate int)
-                     (string var-name)
-                     ))
-  :define ""
-  :generic (F N))
+(defequiv :c++ (array F integer)
+  :translate (lambda (type)
+               (let ((field-type (cadr type))
+                     (length (caddr type)))
+                 (format nil "std::array<~a, ~a>"
+                         (c++-translate field-type)
+                         length)))
+  :declare-var nil ;; default
+  :define nil      ;; default
+  :caster-name "cl_object_to_array"
+  :caster-snippet
+  "template <typename F, int N>
+  ~a (cl_object o) {
+     std::array<F, N> ar;
+     ... somehow build ar from o
+     return (size_t)new std::array<F, N>(ar);
+  }")
 #+end_src
 
 *** Define c++ types
-
-Naming conventions in C++
+**** Naming conventions in C++
 
 #+begin_src lisp :noweb-ref kimia.codegen :results none
 (defun endl () (format nil "~%"))
@@ -233,6 +193,13 @@ Naming conventions in C++
              (string-capitalize
               (string-downcase thing))))
 
+(defun c-type-name (thing)
+  (concatenate
+   'string
+   (substitute #\_ #\-
+               (string-downcase thing))
+   "_t"))
+
 (defun c++-var-name (thing)
   (nstring-downcase
    (remove-if (lambda (x) (string= x "-"))
@@ -241,37 +208,74 @@ Naming conventions in C++
    :start 0
    :end 1))
 
+(defun c-var-name (thing)
+  (concatenate
+   'string
+   (substitute #\_ #\-
+               (string-downcase thing))))
 #+end_src
 
- #+begin_src lisp :eval no :noweb-ref test-kimia
+***** Tests                                                        :noexport:
+  #+begin_src lisp :eval no :noweb-ref test-kimia
 (assert (string= (c++-type-name 'tensor-reader) "TensorReader"))
 (assert (string= (c++-type-name "TeNsor-ReAder") "TensorReader"))
+(assert (string= (c-type-name "TeNsor-ReAder") "tensor_reader_t"))
 (assert (string= (c++-var-name "TeNsor-ReAder") "tensorReader"))
- #+end_src
+(assert (string= (c-var-name "TeNsor-ReAder") "tensor_reader"))
+  #+end_src
 
+**** =defequiv= macro
 
- and something a little bit more challenging
+and something a little bit more challenging
 
- #+begin_src lisp :noweb-ref kimia.codegen
+  #+begin_src lisp :noweb-ref kimia.codegen
 (defparameter *KIMIA-TYPES* '())
 
-(defmacro c++-declare-var-fn-default (translate)
-  `(lambda (ty vn)
-     (format nil "~a ~a;"
-             (funcall ,translate ty)
-             (c++-var-name vn))))
+(defmacro declare-var-fn-default (lang translate)
+  (ecase lang
+    ((:c :c++)
+     `(lambda (ty vn)
+        (format nil "~a ~a;"
+                (funcall ,translate ty)
+                (c++-var-name vn))))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
-(defmacro deftype-c++ (type &key
-                              translate
-                              (declare-var nil)
-                              (define nil)
-                              (satisfies nil)
-                              (generic nil))
-  (let* ((type-name (etypecase type
-                      (cons (car type))
-                      (symbol type)))
-         (type-c++-name (intern (format nil "~A-C++" type-name)))
+  (defun caster-signature-fmt (lang)
+    (ecase lang
+      ((:c :c++)
+       "size_t ~a (const cl_object o)")))
+
+  (defun caster-envelope-fmt (lang)
+    (ecase lang
+      ((:c :c++)
+       (concatenate 'string
+                    "~a~%"
+                    (caster-signature-fmt lang)
+                    "{~%~a~%}"))))
+
+  (defun internal-type-name (type)
+    (string-downcase
+     (etypecase type
+       (cons (format nil "~A-~A"
+                     (car type)
+                     (length type)))
+       (symbol type))))
+
+  (defun defequiv-var-name (lang type)
+    (intern (string-upcase (format nil "~A-~A"
+                                   (internal-type-name type)
+                                   lang)))))
+
+(defmacro defequiv (lang type &key
+                                translate
+                                (declare-var nil)
+                                (define nil)
+                                (satisfies nil)
+                                (caster-header "")
+                                caster-name
+                                caster-snippet)
+  (let* ((type-lang-name (defequiv-var-name lang type))
          (fun-or-scalar (lambda (thing)
                           (etypecase thing
                             (cons (eval thing))
@@ -279,105 +283,379 @@ Naming conventions in C++
                             ((or null string) (eval `(lambda (&optional args)
                                                        ,thing))))))
          (translate (funcall fun-or-scalar translate))
-         (declare-var (or declare-var
-                          (c++-declare-var-fn-default translate))))
+         (caster-header-f (funcall fun-or-scalar caster-header))
+         (caster-name-f (funcall fun-or-scalar caster-name))
+         (caster-snippet-f (funcall fun-or-scalar caster-snippet))
+         (declare-var (or declare-var (eval
+                                       `(declare-var-fn-default ,lang
+                                                                ,translate)))))
     `(progn
-       (defparameter ,type-c++-name nil)
-       (setq ,type-c++-name
+       (defparameter ,type-lang-name nil)
+       (setq ,type-lang-name
              '(:translate ,translate
                :declare-var ,(funcall fun-or-scalar declare-var)
-               :define ,(funcall fun-or-scalar define))))
+               :define ,(funcall fun-or-scalar define)
+               :caster-header ,caster-header-f
+               :caster-name ,caster-name-f
+               :caster-snippet ,(lambda (ty)
+                                  (format nil
+                                          (caster-envelope-fmt lang)
+                                          (funcall caster-header-f ty)
+                                          (funcall caster-name-f ty)
+                                          (funcall caster-snippet-f ty))))))
     ))
 
-(defmacro translate-c++ (ty)
-  (let* ((ty-name (etypecase ty
-                    (cons (car ty))
-                    (symbol ty)))
-         (ty-c++ (intern (format nil "~a-C++" ty-name))))
-    `(funcall (getf ,ty-c++ :translate) ',ty)))
+;; TODO: generalize these funcs
+(defun caster-snippet (lang ty)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :caster-snippet) ty)))
 
-(defmacro define-c++ (ty)
-  (let* ((ty-name (etypecase ty
-                    (cons (car ty))
-                    (symbol ty)))
-         (ty-c++ (intern (format nil "~a-C++" ty-name))))
-    `(funcall (getf ,ty-c++ :define) ',ty)))
+(defun caster-name (lang ty)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :caster-name) ty)))
 
-(defmacro declare-var-c++ (ty vn)
-  (let* ((ty-name (etypecase ty
-                    (cons (car ty))
-                    (symbol ty)))
-         (ty-c++ (intern (format nil "~a-C++" ty-name))))
-    `(funcall (getf ,ty-c++ :declare-var) ',ty ',vn)))
- #+end_src
+(defun translate (lang ty)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :translate) ty)))
 
- #+RESULTS:
- : DECLARE-VAR-C++
+(defun define (lang ty)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :define) ty)))
+
+(defun declare-var (lang ty vn)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :declare-var) ty vn)))
+
+(defun caster-snippet (lang ty)
+  (let ((type-lang-name (defequiv-var-name lang ty)))
+    (funcall (getf (eval type-lang-name) :caster-snippet) ty)))
+
+(defun caster-signature (lang ty)
+  (let ((fmt (format nil "~a;" (caster-signature-fmt lang))))
+    (format nil
+            fmt
+            (caster-name lang ty))))
+  #+end_src
+
+  #+RESULTS:
+  : CASTER-SIGNATURE
+
+
+***** Tests
+
+#+begin_src lisp :eval no :noweb-ref test-kimia
+
+(assert-eq (defequiv-var-name :c++ '(vector F N))
+           'vector-3-c++)
+
+(assert-eq (defequiv-var-name :c '(struct name (vars) (fields)))
+           'struct-4-c)
+
+(assert-eq (defequiv-var-name :c '(struct name (vars) (fields)))
+           'struct-4-c)
+
+(assert-eq (defequiv-var-name :c++ 'integer)
+           'integer-c++)
+
+(assert-eq (defequiv-var-name :c 'integer)
+           'integer-c)
+#+end_src
+
 
 *** Definition for simple C++ types
 
 #+begin_src lisp :noweb-ref kimia.codegen
-(deftype-c++ integer :translate "int")
-(deftype-c++ double :translate "double")
-(deftype-c++ string :translate "std::string")
-(deftype-c++ double-float :translate "double")
-(deftype-c++ single-float :translate "float")
-(deftype-c++ float :translate "float")
-(deftype-c++ boolean :translate "bool")
-
-(deftype-c++ (vector F)
-  :translate (lambda (ty)
-               (format nil "std::vector< ~a >"
-                       (eval `(translate-c++ ,(cadr ty))))))
-
-(deftype-c++ (array F N)
-  :translate (lambda (ty)
-               (format nil "std::array< ~a, ~a >"
-                       (eval `(translate-c++ ,(cadr ty)))
-                       (caddr ty))))
+(defequiv :c++ integer
+  :translate "int"
+  :caster-name "clint"
+  :caster-snippet "return (size_t)new int(ecl_to_int(o));")
+(defequiv :c++ double-float
+  :translate "double"
+  :caster-name "cldouble"
+  :caster-snippet "return (size_t)new double(ecl_to_double(o));")
+(defequiv :c++ single-float
+  :translate "float"
+  :caster-name "clfloat"
+  :caster-snippet "return (size_t)new float(ecl_to_float(o));")
+(defequiv :c++ boolean
+  :translate "bool"
+  :caster-name "clbool"
+  :caster-snippet "return (size_t)new bool(ecl_to_bool(o));")
+(defequiv :c++ string :translate "std::string")
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x21e9280> :DECLARE-VAR
-:  #<bytecompiled-closure #<bytecompiled-function 0x30d2640>> :DEFINE
-:  #<bytecompiled-function 0x21e9230>)
+: (:TRANSLATE #<bytecompiled-function 0x2042dc0> :DECLARE-VAR
+:  #<bytecompiled-function 0x2042b40> :DEFINE #<bytecompiled-function 0x2042e10>
+:  :CASTER-HEADER #<bytecompiled-function 0x2042d20> :CASTER-NAME
+:  #<bytecompiled-function 0x2042af0> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
+
+
+*** Vectors
+
+This is the cpp snippet to convert a common lisp vector into
+another vector
+#+begin_src cpp :noweb-ref vector-cpp-snippet
+~a result(ecl_to_int(cl_length(o)));
+for (size_t i=0; i < result.size(); i++) {
+  ~a *element = (~a*)~a(cl_aref(2, o, i));
+  result[i] = *element;
+}
+return (size_t)new ~a(result);
+#+end_src
+
+#+RESULTS:
+
+where then the =caster-snippet=
+is simpley just
+#+begin_src lisp :noweb-ref vector-cpp-caster-snippet
+(lambda (ty)
+  (format nil
+          +c++-vector-snippet+
+          (translate :c++ ty)
+          (translate :c++ (cadr ty))
+          (translate :c++ (cadr ty))
+          (caster-name :c++ (cadr ty))
+          (translate :c++ ty)
+          ))
+#+end_src
+
+#+RESULTS:
+: #<bytecompiled-function 0x33d5b90>
+
+
+#+begin_src lisp :noweb-ref kimia.codegen :noweb no-export
+(defparameter +c++-vector-snippet+
+"
+<<vector-cpp-snippet>>")
+
+(defequiv :c++ (vector F)
+  :translate (lambda (ty)
+               (format nil "std::vector< ~a >"
+                       (translate :c++ (cadr ty))))
+
+  :caster-name (lambda (ty)
+                 (format nil "vector_of__~a"
+                         (caster-name :c++ (cadr ty))))
+
+  :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
+
+  :caster-snippet
+     <<vector-cpp-caster-snippet>>)
+
+(defequiv :c++ (vector F N)
+
+  :translate (lambda (ty)
+               (format nil "std::array< ~a, ~a >"
+                       (translate :c++ (cadr ty))
+                       (caddr ty)))
+
+  :caster-name (lambda (ty)
+                 (format nil "array_of__~a_~a"
+                         (caddr ty)
+                         (caster-name :c++ (cadr ty))))
+  :caster-snippet
+     <<vector-cpp-caster-snippet>>)
+
+
+#+end_src
+
+#+RESULTS:
+: (:TRANSLATE #<bytecompiled-function 0x2042eb0> :DECLARE-VAR
+:  #<bytecompiled-function 0x2748f50> :DEFINE #<bytecompiled-function 0x2748f00>
+:  :CASTER-HEADER #<bytecompiled-function 0x2042d70> :CASTER-NAME
+:  #<bytecompiled-function 0x20420f0> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
 
 *** The struct
 
+The most central data structure to start doing complex behaviour
+is the =struct= or =class=.
+In common lisp, we will consider a struct as a type as being of the form
+
+#+begin_src lisp :eval no
+(struct name-of-struct-type
+  (:name-of-field-1 type-of-field-1
+   :name-of-field-2 type-of-field-2
+   ...))
+#+end_src
+
+and the name of the struct can be a list with
+generic data types:
+
+#+begin_src lisp :eval no
+(tensor-reader double-float)
+#+end_src
+
+
+
 #+begin_src lisp :noweb-ref kimia.codegen
+;; generic variables
+(defequiv :c++ (G N)
+  :translate (lambda (ty)
+               (format nil "_G~a" (cadr ty))))
+
+(defequiv :c++ (int N)
+  :translate (lambda (ty)
+               (format nil "~a >>" (cadr ty))))
+
+(defun generic-p (type)
+  (etypecase type
+    (cons (eq 'g (car type)))
+    (t nil)))
+
+(defun struct-spec-p (ty)
+  (and (eq (car ty) 'struct)
+       (typep (cadr ty) '(or cons symbol))
+       (typep (caddr ty) '(or cons symbol))
+       (eql (length ty) 3)))
+
+(defun struct-identifier-p (ty)
+  (and (eq (car ty) 'struct)
+       (typep (cadr ty) '(or cons symbol))
+       (eql (length ty) 2)))
+
+(deftype struct-identifier ()
+  '(and cons
+    (satisfies struct-identifier-p)))
+
+(deftype struct-spec ()
+  '(and cons
+    (satisfies struct-spec-p)))
+
+(defun struct-spec-name (ty)
+  (check-type ty (or struct-spec struct-identifier))
+  (let ((name (cadr ty)))
+    (typecase name
+      (symbol name)
+      (cons (car name)))))
+
+(defun struct-spec-generic-vars (ty)
+  (check-type ty (or struct-spec struct-identifier))
+  (etypecase (cadr ty)
+    (cons (cdadr ty))
+    (t nil)))
+
+(defun struct-spec-fields (ty)
+  (check-type ty struct-spec)
+  (caddr ty))
+
+(defun struct-template-line (ty)
+  (let ((gvars (struct-spec-generic-vars ty)))
+    (if gvars
+        (if (remove-if-not #'generic-p gvars)
+            (format nil "template < ~{typename ~a~^, ~} >"
+                    (mapcar (lambda (x) (translate :c++ x)) gvars))
+            "template")
+        "")))
+
+(defun struct-spec-symbol (struct-name)
+  (intern
+   (format nil "~@:(~a-spec~)"
+           struct-name)))
+
+(defun rec-subst (ls what)
+  (let ((pair (car ls)))
+    (etypecase pair
+      (null what) ;; We are done
+      (cons (rec-subst (cdr ls)
+                     (subst (car pair) (cdr pair) what))))))
+
+(defun struct-unnamed-p (ty) (null (struct-spec-name ty)))
+
 (defun translate-struct-c++ (ty)
-  (let* ((ty-name (cadr ty))
+  (let* ((ty-name (struct-spec-name ty))
+         (struct-spec (if (struct-unnamed-p ty)
+                          ty
+                          (eval (struct-spec-symbol ty-name))))
          (name (if ty-name (c++-type-name ty-name) ""))
-         (fields (caddr ty)))
-    (concatenate 'string
-                 "struct " (or name "")
-                 " {" (endl)
-                 (eval
-                  `(concatenate 'string
-                                ,@(loop for kp in fields
-                                        collect
-                                        (format nil
-                                                "  ~a~a"
-                                                (eval
-                                                 `(declare-var-c++
-                                                   ,(cadr kp)
-                                                   ,(car kp)))
-                                                (endl)))))
-                 "}")))
+         (gvars (struct-spec-generic-vars ty))
+         (spec-gvars (struct-spec-generic-vars struct-spec))
+         (subst-list (mapcar (lambda (x y) `(,x . ,y))
+                             gvars spec-gvars))
+         (specialized-spec (rec-subst subst-list struct-spec))
+         (fields (struct-spec-fields specialized-spec))
+         (specialized-gvars (struct-spec-generic-vars specialized-spec))
+         (is-generic (remove-if-not #'generic-p specialized-gvars)))
+    (format nil "~&~a~&struct ~a~a;"
+            (struct-template-line ty)
+            (or name "")
+            (cond
+              ((and specialized-gvars
+                    (not is-generic))
+               (format nil "< ~{~a~^, ~} >"
+                       (mapcar (lambda (ty) (translate :c++ ty))
+                               specialized-gvars)))
+              (t
+               (format nil " {~%~{  ~a~%~}}"
+                       (loop for kp in fields
+                             collect
+                             (declare-var :c++ (cadr kp) (car kp)))))))
+    ))
+
 
 (defun declare-var-struct-c++ (ty vn)
-  (let* ((name (cadr ty))
-         (pre-var (etypecase name
+  (let* ((ty-name (struct-spec-name ty))
+         (pre-var (etypecase ty-name
                     (null (translate-struct-c++ ty))
-                    (t (c++-type-name name)))))
-    (format nil "~a ~a;"
+                    (t (c++-type-name ty-name))))
+         (gvars (struct-spec-generic-vars ty)))
+    (format nil "~a~a ~a;"
             pre-var
+            (if gvars
+                (format nil "< ~{~a~^, ~} >"
+                        (mapcar (lambda (x) (translate :c++ x))
+                                gvars))
+                "")
             (c++-var-name vn))))
 
 (defun define-struct-c++ (ty)
   (format nil "~a;" (translate-struct-c++ ty)))
 
-(deftype-c++ (struct name args)
+(defmacro defgenericstruct (name spec)
+  (let* ((spec `(struct ,name ,spec))
+         (struct-name (struct-spec-name spec))
+         (spec-gvars (struct-spec-generic-vars spec))
+         (struct-spec-var (struct-spec-symbol struct-name)))
+    `(progn
+       (defparameter ,struct-spec-var ',spec)
+       )))
+
+(defgenericstruct
+    (tensor-reader F)
+    ((:name F)
+     (:lens (vector F))))
+
+(defgenericstruct
+    (davidson-solver A B C D)
+    ((:vectorspace A)
+     (:fields (vector B))
+     (:lens (vector C))
+     (:dimension (vector (vector (vector D)) 5))))
+
+(defgenericstruct
+    (Mumu F)
+    ((:name F)))
+
+(defgenericstruct
+    hello-world
+    ((:name string)
+     (:lens (struct Penis ((:lens integer))))))
+
+(defgenericstruct
+    hello-world-2
+    ((:name string)
+     (:struct (struct nil ((:name string))))
+     (:lens (struct Penis ((:lens integer))))))
+
+(defequiv :c++ (struct name)
+  :translate (lambda (ty) (translate-struct-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
+  :define (lambda (ty) (define-struct-c++ ty)))
+
+;; unnamed structs
+(defequiv :c++ (struct nil spec)
   :translate (lambda (ty) (translate-struct-c++ ty))
   :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
   :define (lambda (ty) (define-struct-c++ ty)))
@@ -385,8 +663,7 @@ Naming conventions in C++
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x3067910> :DECLARE-VAR
-:  #<bytecompiled-function 0x30677d0> :DEFINE #<bytecompiled-function 0x3067780>)
+: HELLO-WORLD-SPEC
 
 *** The enums
     
@@ -421,12 +698,12 @@ Naming conventions in C++
 (defun define-enum-c++ (ty)
   (format nil "~a;" (translate-enum-c++ ty)))
 
-(deftype-c++ (enum name args)
+(defequiv :c++ (enum name args)
   :translate (lambda (ty) (translate-enum-c++ ty))
   :declare-var (lambda (ty vn) (declare-var-enum-c++ ty vn))
   :define (lambda (ty) (define-enum-c++ ty)))
 
-(deftype-c++ (member args)
+(defequiv :c++ (member args)
   :translate (lambda (ty)
                (translate-enum-c++ `(enum nil ,@(cdr ty))))
   :declare-var (lambda (ty vn)
@@ -436,8 +713,11 @@ Naming conventions in C++
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x30671e0> :DECLARE-VAR
-:  #<bytecompiled-function 0x3067190> :DEFINE #<bytecompiled-function 0x26eb9b0>)
+: (:TRANSLATE #<bytecompiled-function 0x2042410> :DECLARE-VAR
+:  #<bytecompiled-function 0x20422d0> :DEFINE #<bytecompiled-function 0x2042280>
+:  :CASTER-HEADER #<bytecompiled-function 0x20423c0> :CASTER-NAME
+:  #<bytecompiled-function 0x2042370> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
 
 
 
@@ -505,6 +785,9 @@ cl_object_to_int (cl_object o, std::vector<size_t> args) {
 (defun struct-get-fields (s)
   (car s))
 #+end_src
+
+#+RESULTS:
+: STRUCT-GET-FIELDS
 
 
 
@@ -590,7 +873,7 @@ int main () {
  |    RUNNING | CCSD   |         |
  |    Singles | and    | doulbes |
  |          2 |        |         |
-
+ 
 ** The Step
 *** General idea for defining steps
   To set things in perspective, we would like to define a
@@ -754,12 +1037,12 @@ We still need the definition of a step.
     `(struct ,step-name ((:in ,in-struct)
                          (:out ,out-struct)))))
 
-(defun step-deftype-c++ (step-name args)
+(defun step-defequiv-c++ (step-name args)
   (let ((step-struct (step-setting-step-to-struct-spec step-name args)))
-    (eval `(deftype-c++ ,step-name
-      :translate (lambda (ty) (translate-c++ ,step-struct))
-      :declare-var (lambda (ty vn) (declare-var-c++ ,step-struct vn))
-      :define (lambda (ty) (define-c++ ,step-struct))))))
+    (eval `(defequiv :c++ ,step-name
+      :translate (lambda (ty) (translate :c++ ,step-struct))
+      :declare-var (lambda (ty vn) (declare-var :c++ ,step-struct vn))
+      :define (lambda (ty) (define :c++ ,step-struct))))))
 
 (defparameter *KIMIA-TYPES* '())
 (defmacro defstep (name &rest args)
@@ -777,7 +1060,7 @@ We still need the definition of a step.
          (in (car inout))
          (out (cadr inout)))
     `(progn
-       (step-deftype-c++ ',name ',args)
+       (step-defequiv-c++ ',name ',args)
        (defun ,default-type-fn ()
          '(:name ,name
            :in ,(reduce (lambda (x y) (concatenate 'list x y))
@@ -923,8 +1206,13 @@ steps
 #+begin_src lisp :tangle src/clkimia/t.lisp :eval no :noweb no-export
 (in-package :kimia)
 
+(defmacro assert-eq (one two)
+  `(let ((left-hand ,one)
+         (right-hand ,two))
+     (assert (eq left-hand right-hand))))
+
 <<test-kimia>>
-<<test-kimia.types>>
+;; <<test-kimia.types>>
 
 #+end_src
 
@@ -936,7 +1224,7 @@ steps
 (in-package :kimia)
 
 <<kimia.codegen>>
-<<kimia.types>>
+;;<<kimia.types>>
 <<kimia>>
 
  #+end_src
