@@ -43,6 +43,46 @@ order.
 
 #+RESULTS:
 : WRAP-INPUT-SCRIPT
+
+** Utils
+#+begin_src lisp :noweb-ref kimia
+(defun lines (str
+              &optional (current-line '()) (rest '())
+              &key (sep #\newline))
+  (let* ((lst (coerce str 'list))
+          (rest-str (coerce (cdr lst) 'string))
+          (current-char (car lst)))
+    (cond
+      ((eq current-char sep)
+        (lines rest-str
+              '()
+              (cons (coerce (reverse current-line) 'string) rest)
+              :sep sep))
+      ((null current-char)
+        (reverse (cons (coerce (reverse current-line) 'string) rest)))
+      (t (lines rest-str
+                (cons current-char current-line)
+                rest
+                :sep sep)))))
+
+(defun unlines (lst-str &key (sep "~%"))
+  (format nil (format nil "~a~a~a" "~{~a~^" sep "~}") lst-str))
+
+(defun words (str &key (sep #\space))
+  (lines str nil nil :sep sep))
+
+(defun unwords (str &key (sep #\space))
+  (unlines str :sep sep))
+
+(defun indent (n str &key (sep #\space))
+  (format nil
+          (format nil
+                  "~~{~a~~a~a~~}"
+                  (coerce (make-array n :initial-element sep) 'string)
+                  "~%")
+          (lines str)))
+#+end_src
+
  
 ** Host code generation
 *** Introduction
@@ -644,9 +684,10 @@ generic data types:
     (let* ((spec (struct-get-spec ty))
            (gvars (struct-spec-generic-vars ty))
            (spec-gvars (struct-spec-generic-vars spec))
-           (equivalence-list (mapcar (lambda (x y) `(,x . ,y))
-                                     gvars spec-gvars)))
-      (rec-subst equivalence-list spec)))
+           (equivalence-list (pairlis gvars spec-gvars)))
+      (if equivalence-list
+          (rec-subst equivalence-list spec)
+          spec)))
 
   (defun struct-spec-generic-p (spec)
     (check-type spec (or struct-spec struct-identifier))
