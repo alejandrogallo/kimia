@@ -381,15 +381,17 @@ and something a little bit more challenging
   :translate "bool"
   :caster-name "clbool"
   :caster-snippet "return (size_t)new bool(ecl_to_bool(o));")
-(defequiv :c++ string :translate "std::string")
+(defequiv :c++ string
+  :translate "std::string"
+  :caster-name "clstr")
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x2042dc0> :DECLARE-VAR
-:  #<bytecompiled-function 0x2042b40> :DEFINE #<bytecompiled-function 0x2042e10>
-:  :CASTER-HEADER #<bytecompiled-function 0x2042d20> :CASTER-NAME
-:  #<bytecompiled-function 0x2042af0> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
+: (:TRANSLATE #<bytecompiled-function 0x33d59b0> :DECLARE-VAR
+:  #<bytecompiled-function 0x33d5730> :DEFINE #<bytecompiled-function 0x33d5690>
+:  :CASTER-HEADER #<bytecompiled-function 0x33d5910> :CASTER-NAME
+:  #<bytecompiled-function 0x33d5870> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x270efa0>>)
 
 
 *** Vectors
@@ -408,7 +410,7 @@ return (size_t)new ~a(result);
 #+RESULTS:
 
 where then the =caster-snippet=
-is simpley just
+is simply just
 #+begin_src lisp :noweb-ref vector-cpp-caster-snippet
 (lambda (ty)
   (format nil
@@ -422,7 +424,7 @@ is simpley just
 #+end_src
 
 #+RESULTS:
-: #<bytecompiled-function 0x33d5b90>
+: #<bytecompiled-function 0x33d52d0>
 
 
 #+begin_src lisp :noweb-ref kimia.codegen :noweb no-export
@@ -436,7 +438,7 @@ is simpley just
                        (translate :c++ (cadr ty))))
 
   :caster-name (lambda (ty)
-                 (format nil "vector_of__~a"
+                 (format nil "v_of_~a"
                          (caster-name :c++ (cadr ty))))
 
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
@@ -452,7 +454,7 @@ is simpley just
                        (caddr ty)))
 
   :caster-name (lambda (ty)
-                 (format nil "array_of__~a_~a"
+                 (format nil "array_of_~a_~a"
                          (caddr ty)
                          (caster-name :c++ (cadr ty))))
   :caster-snippet
@@ -488,6 +490,14 @@ generic data types:
 (tensor-reader double-float)
 #+end_src
 
+#+begin_src cpp :noweb-ref struct-cpp-snippet
+std::vector<size_t> addresses;
+for (size_t i=0; i < result.size(); i++) {
+  ~a *element = (~a*)~a(cl_aref(2, o, i));
+  result[i] = *element;
+}
+return (size_t)new ~a(result);
+#+end_src
 
 
 #+begin_src lisp :noweb-ref kimia.codegen
@@ -563,30 +573,39 @@ generic data types:
                      (subst (car pair) (cdr pair) what))))))
 
 (defun struct-unnamed-p (ty) (null (struct-spec-name ty)))
+(defun struct-get-spec (ty)
+  (if (struct-unnamed-p ty)
+      ty
+      (eval (struct-spec-symbol (struct-spec-name ty)))))
+
+(defun struct-get-expanded-spec (ty)
+  (let* ((spec (struct-get-spec ty))
+         (gvars (struct-spec-generic-vars ty))
+         (spec-gvars (struct-spec-generic-vars spec))
+         (equivalence-list (mapcar (lambda (x y) `(,x . ,y))
+                                   gvars spec-gvars)))
+    (rec-subst equivalence-list spec)))
+
+(defun struct-spec-generic-p (spec)
+  (let ((gvars (struct-spec-generic-vars spec)))
+    (remove-if-not #'generic-p gvars)))
 
 (defun translate-struct-c++ (ty)
   (let* ((ty-name (struct-spec-name ty))
-         (struct-spec (if (struct-unnamed-p ty)
-                          ty
-                          (eval (struct-spec-symbol ty-name))))
          (name (if ty-name (c++-type-name ty-name) ""))
-         (gvars (struct-spec-generic-vars ty))
-         (spec-gvars (struct-spec-generic-vars struct-spec))
-         (subst-list (mapcar (lambda (x y) `(,x . ,y))
-                             gvars spec-gvars))
-         (specialized-spec (rec-subst subst-list struct-spec))
+         (specialized-spec (struct-get-expanded-spec ty))
          (fields (struct-spec-fields specialized-spec))
-         (specialized-gvars (struct-spec-generic-vars specialized-spec))
-         (is-generic (remove-if-not #'generic-p specialized-gvars)))
+         (gvars (struct-spec-generic-vars specialized-spec))
+         (is-generic (struct-spec-generic-p specialized-spec)))
     (format nil "~&~a~&struct ~a~a;"
             (struct-template-line ty)
             (or name "")
             (cond
-              ((and specialized-gvars
+              ((and gvars
                     (not is-generic))
                (format nil "< ~{~a~^, ~} >"
                        (mapcar (lambda (ty) (translate :c++ ty))
-                               specialized-gvars)))
+                               gvars)))
               (t
                (format nil " {~%~{  ~a~%~}}"
                        (loop for kp in fields
@@ -594,20 +613,24 @@ generic data types:
                              (declare-var :c++ (cadr kp) (car kp)))))))
     ))
 
-
-(defun declare-var-struct-c++ (ty vn)
+(defun struct-pre-var-c++ (ty)
   (let* ((ty-name (struct-spec-name ty))
          (pre-var (etypecase ty-name
                     (null (translate-struct-c++ ty))
                     (t (c++-type-name ty-name))))
          (gvars (struct-spec-generic-vars ty)))
-    (format nil "~a~a ~a;"
+    (format nil "~a~a"
             pre-var
             (if gvars
                 (format nil "< ~{~a~^, ~} >"
                         (mapcar (lambda (x) (translate :c++ x))
                                 gvars))
-                "")
+                ""))))
+
+(defun declare-var-struct-c++ (ty vn)
+  (let* ((pre-var (struct-pre-var-c++ ty)))
+    (format nil "~a ~a;"
+            pre-var
             (c++-var-name vn))))
 
 (defun define-struct-c++ (ty)
@@ -621,6 +644,55 @@ generic data types:
     `(progn
        (defparameter ,struct-spec-var ',spec)
        )))
+
+(defun struct-caster-name (ty)
+  (let* ((name (struct-spec-name ty))
+         (spec (struct-get-expanded-spec ty))
+         (subtypes (mapcar #'cadr (struct-spec-fields spec)))
+         (is-generic (struct-spec-generic-p spec)))
+    (when is-generic (error "Cannot create a caster for generic struct"))
+    (format nil "s_~a_of_~{~a~^_and_~}"
+            (c-var-name (or name "unnammed"))
+            (mapcar (lambda (x) (caster-name :c++ x)) subtypes))))
+
+(defun struct-caster-snippet (ty)
+  (let* ((name (struct-spec-name ty))
+         (spec (struct-get-expanded-spec ty))
+         (fields (struct-spec-fields spec))
+         (subtypes (mapcar #'cadr fields))
+         (format-arguments
+           (mapcar (lambda (x y z) `(,x ,y ,z))
+                   (mapcar (lambda (x) (translate :c++ x)) subtypes)
+                   (mapcar (lambda (x) (caster-name :c++ x)) subtypes)
+                   (mapcar (lambda (x) (car x)) fields)))
+         (is-generic (struct-spec-generic-p spec))
+         (constructor (mapcar
+                       (lambda (x)
+                         (format nil
+                                 "~?"
+                                 "*(~a*)~a(cl_getf(2, o, c_string_to_object(\"~s\")))"
+                                 x))
+                       format-arguments)))
+    (when is-generic (error "Cannot create a caster for generic struct"))
+    (format nil "return (size_t)new ~a{~%~{  ~a~^, ~%~}~%};"
+            (struct-pre-var-c++ spec)
+            constructor)
+    ))
+
+(defequiv :c++ (struct name)
+  :translate (lambda (ty) (translate-struct-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
+  :define (lambda (ty) (define-struct-c++ ty))
+  :caster-name #'struct-caster-name
+  :caster-snippet #'struct-caster-snippet)
+
+;; unnamed structs
+(defequiv :c++ (struct nil spec)
+  :translate (lambda (ty) (translate-struct-c++ ty))
+  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
+  :define (lambda (ty) (define-struct-c++ ty))
+  :caster-name #'struct-caster-name
+  :caster-snippet #'struct-caster-snippet)
 
 (defgenericstruct
     (tensor-reader F)
@@ -641,7 +713,7 @@ generic data types:
 (defgenericstruct
     hello-world
     ((:name string)
-     (:lens (struct Penis ((:lens integer))))))
+     (:lens (struct nil ((:lens integer))))))
 
 (defgenericstruct
     hello-world-2
@@ -649,21 +721,10 @@ generic data types:
      (:struct (struct nil ((:name string))))
      (:lens (struct Penis ((:lens integer))))))
 
-(defequiv :c++ (struct name)
-  :translate (lambda (ty) (translate-struct-c++ ty))
-  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
-  :define (lambda (ty) (define-struct-c++ ty)))
-
-;; unnamed structs
-(defequiv :c++ (struct nil spec)
-  :translate (lambda (ty) (translate-struct-c++ ty))
-  :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
-  :define (lambda (ty) (define-struct-c++ ty)))
-
 #+end_src
 
 #+RESULTS:
-: HELLO-WORLD-SPEC
+: HELLO-WORLD-2-SPEC
 
 *** The enums
     
@@ -713,11 +774,11 @@ generic data types:
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x2042410> :DECLARE-VAR
-:  #<bytecompiled-function 0x20422d0> :DEFINE #<bytecompiled-function 0x2042280>
-:  :CASTER-HEADER #<bytecompiled-function 0x20423c0> :CASTER-NAME
-:  #<bytecompiled-function 0x2042370> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
+: (:TRANSLATE #<bytecompiled-function 0x38fda00> :DECLARE-VAR
+:  #<bytecompiled-function 0x38fd550> :DEFINE #<bytecompiled-function 0x38fd000>
+:  :CASTER-HEADER #<bytecompiled-function 0x38fd9b0> :CASTER-NAME
+:  #<bytecompiled-function 0x38fd910> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x270efa0>>)
 
 
 
