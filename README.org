@@ -662,7 +662,7 @@ generic data types:
              struct-name)))
 
   (defun rec-subst (ls what)
-    (check-type ls cons)
+    (check-type ls list)
     (check-type what cons)
     (let ((pair (car ls)))
       (etypecase pair
@@ -739,6 +739,31 @@ generic data types:
   (defun define-struct-c++ (ty)
     (format nil "~a;" (translate-struct-c++ ty)))
 
+  (defun get-keys (lst &optional (rest '()))
+    "This function just gets every other element
+  "
+    (check-type lst (or cons null))
+    (let ((head (car lst))
+          (tail (cdr lst)))
+      (case tail
+        ((nil) (reverse rest))
+        (otherwise (get-keys (cdr tail)
+                             (cons head rest))))))
+
+
+  (defun struct-check-type (cons-struct ty)
+    (check-type cons-struct cons)
+    (check-type ty (or struct-spec struct-identifier))
+    (let* ((spec (struct-get-expanded-spec ty))
+           (fields (struct-spec-fields spec)))
+      (dolist (key (get-keys cons-struct))
+        (let* ((type (find key fields :test
+                           (lambda (k x) (getf x k)))))
+          (print key)
+          (print (typep (getf cons-struct key) (getf type key)))
+          ))
+      ))
+
   (defun struct-caster-name (ty)
     (let* ((name (struct-spec-name ty))
            (spec (struct-get-expanded-spec ty))
@@ -760,17 +785,26 @@ generic data types:
                      (mapcar (lambda (x) (caster-name :c++ x)) subtypes)
                      (mapcar (lambda (x) (car x)) fields)))
            (is-generic (struct-spec-generic-p spec))
-           (constructor (mapcar
-                         (lambda (x)
-                           (format nil
-                                   "~?"
-                                   "*(~a*)~a(cl_getf(2, o, c_string_to_object(\"~s\")))"
-                                   x))
-                         format-arguments)))
+           (constructor
+             (mapcar
+              (lambda (x)
+                (format nil
+                        "~?"
+                        "*(~a*)~a(cl_getf(2, o, c_string_to_object(\"~s\")))"
+                        x))
+              format-arguments)))
       (when is-generic (error "Cannot create a caster for generic struct"))
       (format nil "return (size_t)new ~a{~%~{  ~a~^, ~%~}~%};"
               (struct-pre-var-c++ spec)
               constructor)))
+
+  (defun struct-caster-header (ty)
+    (let* ((spec (struct-get-expanded-spec ty))
+           (fields (struct-spec-fields spec))
+           (subtypes (mapcar #'cadr fields)))
+      (format nil "~{~a~^~%~}" (mapcar (lambda (x)
+                                         (caster-signature :c++ x))
+                                       subtypes))))
 
   )
 
@@ -783,12 +817,12 @@ generic data types:
        (defparameter ,struct-spec-var ',spec)
        )))
 
-
 (defequiv :c++ (struct name)
   :translate (lambda (ty) (translate-struct-c++ ty))
   :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
   :define (lambda (ty) (define-struct-c++ ty))
   :caster-name #'struct-caster-name
+  :caster-header #'struct-caster-header
   :caster-snippet #'struct-caster-snippet)
 
 ;; unnamed structs
@@ -799,7 +833,6 @@ generic data types:
   :caster-name #'struct-caster-name
   :caster-snippet #'struct-caster-snippet)
 
-
 #+end_src
 
 **** Tests
@@ -808,7 +841,7 @@ generic data types:
 (defgenericstruct
     tensor-reader-double
     ((:name string)
-     (:lens (vector double-float))))
+     (:lens (array double-float))))
 
 (defgenericstruct
     (tensor-reader F)
@@ -897,6 +930,17 @@ generic data types:
          '(struct (davidson-solver integer string integer (g 4)))))
 (assert-not (struct-spec-generic-p
              '(struct (davidson-solver integer string integer integer))))
+
+;; get-keys
+(assert-equal (get-keys '(:asdf 5 :err 98))
+              '(:asdf :err))
+(assert-equal (get-keys '(:asdf 5 :err))
+              '(:asdf))
+
+(struct-get-expanded-spec '(struct tensor-reader-double))
+;; struct-typep
+;(struct-typep '(:name "hello world" :lens #(5d0 9d0 8d0))
+;'(struct tensor-reader-double))
 #+end_src
 
 
@@ -1266,16 +1310,7 @@ and the =:out= part from a list
         ((eq lst '()) `(,(reverse tail) ,rest))
         (t (consume-in-out rest (cons first tail)))))))
 
-(defun get-keys (lst &optional (rest '()))
-  "This function just gets every other element
-  "
-  (check-type lst (or cons null))
-  (let ((head (car lst))
-        (tail (cdr lst)))
-    (case tail
-      ((nil) (reverse rest))
-      (otherwise (get-keys (cdr tail)
-                           (cons head rest))))))
+
 
 #+end_src
 
