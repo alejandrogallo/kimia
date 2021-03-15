@@ -364,7 +364,7 @@ and something a little bit more challenging
 
 *** Definition for simple C++ types
 
-#+begin_src lisp :noweb-ref kimia.codegen
+#+begin_src lisp :noweb-ref kimia.codegen :results none
 (defequiv :c++ integer
   :translate "int"
   :caster-name "clint"
@@ -386,14 +386,6 @@ and something a little bit more challenging
   :caster-name "clstr")
 #+end_src
 
-#+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x33d59b0> :DECLARE-VAR
-:  #<bytecompiled-function 0x33d5730> :DEFINE #<bytecompiled-function 0x33d5690>
-:  :CASTER-HEADER #<bytecompiled-function 0x33d5910> :CASTER-NAME
-:  #<bytecompiled-function 0x33d5870> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x270efa0>>)
-
-
 *** Vectors
 
 This is the cpp snippet to convert a common lisp vector into
@@ -411,7 +403,7 @@ return (size_t)new ~a(result);
 
 where then the =caster-snippet=
 is simply just
-#+begin_src lisp :noweb-ref vector-cpp-caster-snippet
+#+begin_src lisp :noweb-ref vector-cpp-caster-snippet :eval no
 (lambda (ty)
   (format nil
           +c++-vector-snippet+
@@ -423,11 +415,8 @@ is simply just
           ))
 #+end_src
 
-#+RESULTS:
-: #<bytecompiled-function 0x33d52d0>
 
-
-#+begin_src lisp :noweb-ref kimia.codegen :noweb no-export
+#+begin_src lisp :noweb-ref kimia.codegen :noweb no-export :results none
 (defparameter +c++-vector-snippet+
 "
 <<vector-cpp-snippet>>")
@@ -464,12 +453,25 @@ is simply just
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x2042eb0> :DECLARE-VAR
-:  #<bytecompiled-function 0x2748f50> :DEFINE #<bytecompiled-function 0x2748f00>
-:  :CASTER-HEADER #<bytecompiled-function 0x2042d70> :CASTER-NAME
-:  #<bytecompiled-function 0x20420f0> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x38fd730>>)
+: (:TRANSLATE #<bytecompiled-function 0x33d50a0> :DECLARE-VAR
+:  #<bytecompiled-function 0x33d55f0> :DEFINE #<bytecompiled-function 0x33d5640>
+:  :CASTER-HEADER #<bytecompiled-function 0x33d5050> :CASTER-NAME
+:  #<bytecompiled-function 0x33d5000> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x270efa0>>)
 
+*** Generic variables
+
+#+begin_src lisp :noweb-ref kimia.codegen
+;; generic variables
+(defequiv :c++ (G N)
+  :translate (lambda (ty)
+               (format nil "_G~a" (cadr ty))))
+
+(defun generic-p (type)
+  (etypecase type
+    (cons (eq 'g (car type)))
+    (t nil)))
+#+end_src
 *** The struct
 
 The most central data structure to start doing complex behaviour
@@ -486,35 +488,8 @@ In common lisp, we will consider a struct as a type as being of the form
 and the name of the struct can be a list with
 generic data types:
 
-#+begin_src lisp :eval no
-(tensor-reader double-float)
-#+end_src
-
-#+begin_src cpp :noweb-ref struct-cpp-snippet
-std::vector<size_t> addresses;
-for (size_t i=0; i < result.size(); i++) {
-  ~a *element = (~a*)~a(cl_aref(2, o, i));
-  result[i] = *element;
-}
-return (size_t)new ~a(result);
-#+end_src
-
 
 #+begin_src lisp :noweb-ref kimia.codegen
-;; generic variables
-(defequiv :c++ (G N)
-  :translate (lambda (ty)
-               (format nil "_G~a" (cadr ty))))
-
-(defequiv :c++ (int N)
-  :translate (lambda (ty)
-               (format nil "~a >>" (cadr ty))))
-
-(defun generic-p (type)
-  (etypecase type
-    (cons (eq 'g (car type)))
-    (t nil)))
-
 (defun struct-spec-p (ty)
   (and (eq (car ty) 'struct)
        (typep (cadr ty) '(or cons symbol))
