@@ -309,7 +309,36 @@ and something a little bit more challenging
     (check-type lang keyword)
     (intern (format nil "~@:(~A-~A~)"
                     (internal-type-name type)
-                    lang))))
+                    lang)))
+
+  (defun defequiv-spec (lang type)
+    (let ((var (defequiv-var-name lang type)))
+      (if (boundp var)
+          (eval var)
+          (error (format nil "No equivalence found for type ~a for lang ~a"
+                         type lang)))))
+  )
+
+(defmacro defequiv-alias (lang type from-type)
+  (let ((new-spec-name (defequiv-var-name lang type))
+        (spec-name (defequiv-var-name lang from-type)))
+    `(setq ,new-spec-name ,spec-name)))
+
+(defmacro defequiv-from (lang type &rest args &key from &allow-other-keys)
+  (remf args :from)
+  (flet ((fun-or-scalar (thing)
+           (etypecase thing
+             (cons (eval thing))
+             (compiled-function thing)
+             ((or null string) (eval `(lambda (&optional args)
+                                        ,thing))))))
+    (let* ((new-spec-name (defequiv-var-name lang type))
+           (spec (copy-seq (defequiv-spec lang from)))
+           (keys (get-keys args)))
+      (dolist (key keys)
+        (unless (null (getf args key))
+          (setf (getf spec key) (fun-or-scalar (getf args key)))))
+      `(setq ,new-spec-name ',spec))))
 
 (defmacro defequiv (lang type
                     &key
@@ -318,6 +347,7 @@ and something a little bit more challenging
                       (define nil)
                       (satisfies nil)
                       (caster-header "")
+                      (caster-body "")
                       caster-name
                       caster-snippet)
   (flet ((fun-or-scalar (thing)
@@ -330,7 +360,16 @@ and something a little bit more challenging
            (translate (fun-or-scalar translate))
            (caster-header-f (fun-or-scalar caster-header))
            (caster-name-f (fun-or-scalar caster-name))
-           (caster-snippet-f (fun-or-scalar caster-snippet))
+           (caster-body-f (fun-or-scalar caster-body))
+           (caster-snippet-f
+             (if caster-snippet
+                 (fun-or-scalar caster-snippet)
+                 (lambda (ty) (format
+                               nil
+                               (caster-envelope-fmt lang)
+                               (funcall caster-header-f ty)
+                               (funcall caster-name-f ty)
+                               (indent 2 (funcall caster-body-f ty))))))
            (declare-var (or declare-var (eval
                                          `(declare-var-fn-default ,lang
                                                                   ,translate)))))
@@ -342,39 +381,34 @@ and something a little bit more challenging
                  :define ,(fun-or-scalar define)
                  :caster-header ,caster-header-f
                  :caster-name ,caster-name-f
-                 :caster-snippet ,(lambda (ty)
-                                    (format
-                                     nil
-                                     (caster-envelope-fmt lang)
-                                     (funcall caster-header-f ty)
-                                     (funcall caster-name-f ty)
-                                     (indent 2 (funcall caster-snippet-f ty)))))))
+                 :caster-body ,caster-body-f
+                 :caster-snippet ,caster-snippet-f)))
       )))
 
 ;; TODO: generalize these funcs
 (defun caster-snippet (lang ty)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :caster-snippet) ty)))
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :caster-snippet) ty)))
+
+(defun caster-body (lang ty)
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :caster-body) ty)))
 
 (defun caster-name (lang ty)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :caster-name) ty)))
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :caster-name) ty)))
 
 (defun translate (lang ty)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :translate) ty)))
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :translate) ty)))
 
 (defun define (lang ty)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :define) ty)))
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :define) ty)))
 
 (defun declare-var (lang ty vn)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :declare-var) ty vn)))
-
-(defun caster-snippet (lang ty)
-  (let ((type-lang-name (defequiv-var-name lang ty)))
-    (funcall (getf (eval type-lang-name) :caster-snippet) ty)))
+  (let ((spec (defequiv-spec lang ty)))
+    (funcall (getf spec :declare-var) ty vn)))
 
 (defun caster-signature (lang ty)
   (let ((fmt (format nil "~a;" (caster-signature-fmt lang))))
@@ -390,19 +424,34 @@ and something a little bit more challenging
 ***** Tests
 
 #+begin_src lisp :eval no :noweb-ref test-kimia
+(dolist (lang '(:c :c++))
+  ;; caster-signature-fmt
+  (assert-equal (caster-signature-fmt lang) "~&size_t ~a (const cl_object o)")
+  ;; caster-envelope-fmt
+  (assert-equal (caster-envelope-fmt lang)
+                "~&~a~&size_t ~a (const cl_object o){~&~a~&}"))
 
+;; internal-type-name
+(assert-equal (internal-type-name 'integer)
+              "integer")
+(assert-equal (internal-type-name '(struct something asdf ))
+              "struct-3")
+
+;; defequiv-var-name
+(assert-eq (defequiv-var-name :c '(struct something asdf ))
+           'STRUCT-3-C)
+(assert-eq (defequiv-var-name :c++ '(struct something asdf ))
+           'STRUCT-3-C++)
+
+;; defequiv-var-name
 (assert-eq (defequiv-var-name :c++ '(vec F N))
            'vec-3-c++)
-
 (assert-eq (defequiv-var-name :c '(struct name (vars) (fields)))
            'struct-4-c)
-
 (assert-eq (defequiv-var-name :c '(struct name (vars) (fields)))
            'struct-4-c)
-
 (assert-eq (defequiv-var-name :c++ 'integer)
            'integer-c++)
-
 (assert-eq (defequiv-var-name :c 'integer)
            'integer-c)
 #+end_src
@@ -413,25 +462,27 @@ and something a little bit more challenging
 #+begin_src lisp :noweb-ref kimia.codegen :results none
 (defequiv :c++ integer
   :translate "int"
-  :caster-name "clint"
-  :caster-snippet "return (size_t)new int(ecl_to_int(o));")
+  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
+  :caster-body (lambda (ty)
+                    (format nil "return (size_t)new (~a)(ecl_to_int(o));"
+                            (translate :c++ ty))))
 (defequiv :c++ double-float
   :translate "double"
-  :caster-name "cldouble"
-  :caster-snippet "return (size_t)new double(ecl_to_double(o));")
+  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
+  :caster-body "return (size_t)new double(ecl_to_double(o));")
 (defequiv :c++ single-float
   :translate "float"
-  :caster-name "clfloat"
-  :caster-snippet "return (size_t)new float(ecl_to_float(o));")
+  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
+  :caster-body "return (size_t)new float(ecl_to_float(o));")
 (defequiv :c++ boolean
   :translate "bool"
-  :caster-name "clbool"
-  :caster-snippet "return (size_t)new bool(ecl_to_bool(o));")
+  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
+  :caster-body "return (size_t)new bool(ecl_to_bool(o));")
 
-;; TODO: caster snippet
+;; TODO: caster body
 (defequiv :c++ string
   :translate "std::string"
-  :caster-name "clstr")
+  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty))))
 #+end_src
 
 **** Tests                                                         :noexport:
@@ -460,7 +511,7 @@ and something a little bit more challenging
 
 This is the cpp snippet to convert a common lisp vector into
 another vector
-#+begin_src cpp :noweb-ref vector-cpp-snippet
+#+begin_src cpp :noweb-ref vector-cpp-body
 ~a result(ecl_to_int(cl_length(o)));
 for (size_t i=0; i < result.size(); i++) {
   ~a *element = (~a*)~a(cl_aref(2, o, i));
@@ -471,12 +522,12 @@ return (size_t)new ~a(result);
 
 #+RESULTS:
 
-where then the =caster-snippet=
+where then the =caster-body=
 is simply just
-#+begin_src lisp :noweb-ref vector-cpp-caster-snippet :eval no
+#+begin_src lisp :noweb-ref vector-cpp-caster-body :eval no
 (lambda (ty)
   (format nil
-          +c++-vector-snippet+
+          +c++-vector-body+
           (translate :c++ ty)
           (translate :c++ (cadr ty))
           (translate :c++ (cadr ty))
@@ -487,9 +538,9 @@ is simply just
 
 
 #+begin_src lisp :noweb-ref kimia.codegen :noweb no-export :results none
-(defparameter +c++-vector-snippet+
+(defparameter +c++-vector-body+
 "
-<<vector-cpp-snippet>>")
+<<vector-cpp-body>>")
 
 (defun vec-p (F v)
   (every (lambda (x) (typep x F))
@@ -510,8 +561,8 @@ is simply just
 
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
 
-  :caster-snippet
-     <<vector-cpp-caster-snippet>>)
+  :caster-body
+     <<vector-cpp-caster-body>>)
 
 (defequiv :c++ (vec F N)
 
@@ -524,8 +575,8 @@ is simply just
                  (format nil "ar_of_~a_~a"
                          (caddr ty)
                          (caster-name :c++ (cadr ty))))
-  :caster-snippet
-     <<vector-cpp-caster-snippet>>)
+  :caster-body
+     <<vector-cpp-caster-body>>)
 
 
 #+end_src
@@ -608,22 +659,29 @@ size_t v_of_clint (const cl_object o){
 
 Also pointers and const qualifiers have to be implemented.
 
-#+begin_src lisp :noweb-ref kimia.codegen
+#+begin_src lisp :noweb-ref kimia.codegen :results none
 (deftype pointer (type-pointed-to)
   '(and symbol))
 
 (defequiv :c++ (pointer F)
   :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
-  :caster-name (lambda (ty)
-                 (format nil "p~a" (caster-name :c++ (cadr ty)))))
+  :caster-body (lambda (ty) (format nil "return (size_t)(~a*)new ~a(o);"
+                                    (translate :c++ ty)
+                                    (caster-name :c++ (cadr ty))))
+  :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
+  :caster-name (lambda (ty) (format nil "p~a" (caster-name :c++ (cadr ty))))
+  )
 
 (deftype const (type-pointed-to)
   `(satisfies ,(lambda (x) (typep x type-pointed-to))))
 
 (defequiv :c++ (const F)
   :translate (lambda (ty) (format nil "const ~a" (translate :c++ (cadr ty))))
-  :caster-snippet (lambda (ty) (caster-snippet :c++ (cadr ty))))
+  :caster-name (lambda (ty) (caster-name :c++ (cadr ty)))
+  :caster-header (lambda (ty) (caster-header :c++ (cadr ty)))
+  :caster-body (lambda (ty) (caster-body :c++ (cadr ty))))
 #+end_src
+
 
 *** The struct
 
@@ -807,7 +865,7 @@ generic data types:
               (c-var-name (or name "unnammed"))
               (mapcar (lambda (x) (caster-name :c++ x)) subtypes))))
 
-  (defun struct-caster-snippet (ty)
+  (defun struct-caster-body (ty)
     (let* ((name (struct-spec-name ty))
            (spec (struct-get-expanded-spec ty))
            (fields (struct-spec-fields spec))
@@ -856,7 +914,7 @@ generic data types:
   :define (lambda (ty) (define-struct-c++ ty))
   :caster-name #'struct-caster-name
   :caster-header #'struct-caster-header
-  :caster-snippet #'struct-caster-snippet)
+  :caster-body #'struct-caster-body)
 
 ;; unnamed structs
 (defequiv :c++ (struct nil spec)
@@ -865,7 +923,7 @@ generic data types:
   :define (lambda (ty) (define-struct-c++ ty))
   :caster-name #'struct-caster-name
   :caster-header #'struct-caster-header
-  :caster-snippet #'struct-caster-snippet)
+  :caster-body #'struct-caster-body)
 
 (deftype struct (name)
   `(and cons
@@ -1066,11 +1124,12 @@ size_t s_uttu_of_clint (const cl_object o){
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x38fda00> :DECLARE-VAR
-:  #<bytecompiled-function 0x38fd550> :DEFINE #<bytecompiled-function 0x38fd000>
-:  :CASTER-HEADER #<bytecompiled-function 0x38fd9b0> :CASTER-NAME
-:  #<bytecompiled-function 0x38fd910> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x270efa0>>)
+: (:TRANSLATE #<bytecompiled-function 0x24c99b0> :DECLARE-VAR
+:  #<bytecompiled-function 0x24c9b90> :DEFINE #<bytecompiled-function 0x24c9c30>
+:  :CASTER-HEADER #<bytecompiled-function 0x24c9a00> :CASTER-NAME
+:  #<bytecompiled-function 0x24c9a50> :CASTER-BODY
+:  #<bytecompiled-function 0x24c9af0> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x3951a00>>)
 
 
 
