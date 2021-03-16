@@ -24,7 +24,7 @@ input in a monadic-like interface, where the step will return the
 variable ~*KIMIA-STEPS*~ where the steps of the input are stored in
 order.
 
-#+begin_src lisp :noweb-ref kimia
+#+begin_src lisp :noweb-ref kimia :eval no
 (defparameter *KIMIA-STEPS* '())
 
 (defmacro wrap-input-script (&rest arg)
@@ -82,6 +82,9 @@ order.
                   "~%")
           (lines str)))
 #+end_src
+
+#+RESULTS:
+: INDENT
 
  
 ** Host code generation
@@ -290,7 +293,7 @@ and something a little bit more challenging
     (ecase lang
       ((:c :c++)
        (concatenate 'string
-                    "~a~%"
+                    "~&~a"
                     (caster-signature-fmt lang)
                     "{~&~a~&}"))))
 
@@ -303,47 +306,50 @@ and something a little bit more challenging
        (symbol type))))
 
   (defun defequiv-var-name (lang type)
-    (intern (string-upcase (format nil "~A-~A"
-                                   (internal-type-name type)
-                                   lang)))))
+    (check-type lang keyword)
+    (intern (format nil "~@:(~A-~A~)"
+                    (internal-type-name type)
+                    lang))))
 
-(defmacro defequiv (lang type &key
-                                translate
-                                (declare-var nil)
-                                (define nil)
-                                (satisfies nil)
-                                (caster-header "")
-                                caster-name
-                                caster-snippet)
-  (let* ((type-lang-name (defequiv-var-name lang type))
-         (fun-or-scalar (lambda (thing)
-                          (etypecase thing
-                            (cons (eval thing))
-                            (compiled-function thing)
-                            ((or null string) (eval `(lambda (&optional args)
-                                                       ,thing))))))
-         (translate (funcall fun-or-scalar translate))
-         (caster-header-f (funcall fun-or-scalar caster-header))
-         (caster-name-f (funcall fun-or-scalar caster-name))
-         (caster-snippet-f (funcall fun-or-scalar caster-snippet))
-         (declare-var (or declare-var (eval
-                                       `(declare-var-fn-default ,lang
-                                                                ,translate)))))
-    `(progn
-       (defparameter ,type-lang-name nil)
-       (setq ,type-lang-name
-             '(:translate ,translate
-               :declare-var ,(funcall fun-or-scalar declare-var)
-               :define ,(funcall fun-or-scalar define)
-               :caster-header ,caster-header-f
-               :caster-name ,caster-name-f
-               :caster-snippet ,(lambda (ty)
-                                  (format nil
-                                          (caster-envelope-fmt lang)
-                                          (funcall caster-header-f ty)
-                                          (funcall caster-name-f ty)
-                                          (indent 2 (funcall caster-snippet-f ty)))))))
-    ))
+(defmacro defequiv (lang type
+                    &key
+                      translate
+                      (declare-var nil)
+                      (define nil)
+                      (satisfies nil)
+                      (caster-header "")
+                      caster-name
+                      caster-snippet)
+  (flet ((fun-or-scalar (thing)
+           (etypecase thing
+             (cons (eval thing))
+             (compiled-function thing)
+             ((or null string) (eval `(lambda (&optional args)
+                                        ,thing))))))
+    (let* ((type-lang-name (defequiv-var-name lang type))
+           (translate (fun-or-scalar translate))
+           (caster-header-f (fun-or-scalar caster-header))
+           (caster-name-f (fun-or-scalar caster-name))
+           (caster-snippet-f (fun-or-scalar caster-snippet))
+           (declare-var (or declare-var (eval
+                                         `(declare-var-fn-default ,lang
+                                                                  ,translate)))))
+      `(progn
+         (defparameter ,type-lang-name nil)
+         (setq ,type-lang-name
+               '(:translate ,translate
+                 :declare-var ,(fun-or-scalar declare-var)
+                 :define ,(fun-or-scalar define)
+                 :caster-header ,caster-header-f
+                 :caster-name ,caster-name-f
+                 :caster-snippet ,(lambda (ty)
+                                    (format
+                                     nil
+                                     (caster-envelope-fmt lang)
+                                     (funcall caster-header-f ty)
+                                     (funcall caster-name-f ty)
+                                     (indent 2 (funcall caster-snippet-f ty)))))))
+      )))
 
 ;; TODO: generalize these funcs
 (defun caster-snippet (lang ty)
@@ -443,8 +449,7 @@ and something a little bit more challenging
               "int thisIsAVariable;")
 
 (assert-equal (caster-snippet :c++ 'double-float)
-"
-size_t cldouble (const cl_object o){
+"size_t cldouble (const cl_object o){
   return (size_t)new double(ecl_to_double(o));
 }")
 
@@ -557,8 +562,7 @@ size_t v_of_clint (const cl_object o){
               "ar_of_8_v_of_cldouble")
 
 (assert-equal (caster-snippet :c++ '(vec (vec double-float) 8))
-              "
-size_t ar_of_8_v_of_cldouble (const cl_object o){
+"size_t ar_of_8_v_of_cldouble (const cl_object o){
   
   std::array< std::vector< double >, 8 > result(ecl_to_int(cl_length(o)));
   for (size_t i=0; i < result.size(); i++) {
@@ -585,6 +589,9 @@ size_t ar_of_8_v_of_cldouble (const cl_object o){
     (t nil)))
 #+end_src
 
+#+RESULTS:
+: GENERIC-P
+
 **** Tests
 #+begin_src lisp :eval no :noweb-ref test-kimia
 (assert (generic-p '(g 5)))
@@ -596,6 +603,27 @@ size_t ar_of_8_v_of_cldouble (const cl_object o){
               "_G98")
 #+end_src
 
+
+*** Pointers and const
+
+Also pointers and const qualifiers have to be implemented.
+
+#+begin_src lisp :noweb-ref kimia.codegen
+(deftype pointer (type-pointed-to)
+  '(and symbol))
+
+(defequiv :c++ (pointer F)
+  :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
+  :caster-name (lambda (ty)
+                 (format nil "p~a" (caster-name :c++ (cadr ty)))))
+
+(deftype const (type-pointed-to)
+  `(satisfies ,(lambda (x) (typep x type-pointed-to))))
+
+(defequiv :c++ (const F)
+  :translate (lambda (ty) (format nil "const ~a" (translate :c++ (cadr ty))))
+  :caster-snippet (lambda (ty) (caster-snippet :c++ (cadr ty))))
+#+end_src
 
 *** The struct
 
@@ -836,8 +864,13 @@ generic data types:
   :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
   :define (lambda (ty) (define-struct-c++ ty))
   :caster-name #'struct-caster-name
+  :caster-header #'struct-caster-header
   :caster-snippet #'struct-caster-snippet)
 
+(deftype struct (name)
+  `(and cons
+        (satisfies ,(lambda (x)
+                      (struct-check-type `(struct ,name) x)))))
 #+end_src
 
 **** Tests
@@ -943,10 +976,45 @@ generic data types:
               '(:asdf))
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
-;; struct-typep
 
+;; TYPE CHECKING
 (assert (struct-check-type '(struct tensor-reader-double)
                            '(:name "hello world" :lens #(5.0d0 9.0d0))))
+(assert-not (struct-check-type '(struct tensor-reader-double)
+                               '(:name "hello world" :lens #(5.0d0 9.0))))
+(assert-not (struct-check-type '(struct tensor-reader-double)
+                               '(:name 5 :lens #(5.0d0 9.0d0))))
+
+(assert (typep '(:name 654.5d0)
+               '(struct (Uttu double-float))))
+(assert-not (typep '(:name 654.5d0)
+                   '(struct (Uttu integer))))
+
+
+;;;;; CODE GENERATION
+(assert-equal
+ (translate :c++ '(struct (uttu string)))
+ "template
+struct Uttu< std::string >;")
+
+(assert-equal
+ (translate :c++ '(struct (uttu (g 5))))
+ "template < typename _G5 >
+struct Uttu {
+  _G5 name;
+};")
+
+(assert-equal (caster-signature :c++ '(struct (uttu integer)))
+              "size_t s_uttu_of_clint (const cl_object o);")
+
+(assert-equal (caster-snippet :c++ '(struct (uttu integer)))
+"size_t clint (const cl_object o);
+size_t s_uttu_of_clint (const cl_object o){
+  return (size_t)new Uttu< int >{
+    ,*(int*)clint(cl_getf(2, o, c_string_to_object(\":NAME\")))
+  };
+}")
+
 #+end_src
 
 
@@ -1160,8 +1228,9 @@ int main () {
  |          2 |        |         |
  
 ** Testing
-#+begin_src lisp :tangle src/clkimia/t.lisp :eval no :noweb no-export
-(in-package :kimia)
+Let us define a poor man's test unit framework
+
+#+begin_src lisp :tangle src/clkimia/t.lisp :noweb-ref test-framework :results none
 
 (defmacro assert-not (thing)
   `(let ((value (not ,thing)))
@@ -1172,17 +1241,24 @@ int main () {
 (defmacro assert-equal (one two)
   `(let ((value (equal ,one ,two)))
      (unless value
-       (format t "~%~%~s~%~Tis not equal to ~%~T~s~%~%"
+       (format t "~2%~s~%~Tis not equal to ~%~T~s~2%"
                ',one ',two)
        (assert nil))))
 
 (defmacro assert-eq (one two)
   `(let ((value (eq ,one ,two)))
      (unless value
-       (format t "~%~%~s~%~Tis not eq to ~%~T~s~%~%"
+       (format t "~2%~s~%~Tis not eq to ~%~T~s~2%"
                ',one ',two)
        (assert nil))))
+#+end_src
 
+and the main testing package is therefore
+
+#+begin_src lisp :tangle src/clkimia/t.lisp :eval no :noweb no-export
+(in-package :kimia)
+
+<<test-framework>>
 <<test-kimia>>
 ;; <<test-kimia.types>>
 
