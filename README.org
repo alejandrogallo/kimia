@@ -155,10 +155,10 @@ cl_object_to_TensorReaderSettings (cl_object *o) {
  | =integer=        | =int=              |
  | =double-float=   | =double=           |
  | =single-float=   | =float=            |
- | =(list F N)=     | =std::array<F, N>= |
- | =(list F)=       | =std::vector<F>=   |
- | =(vector F N)=   | =std::array<F, N>= |
- | =(vector F)=     | =std::vector<F>=   |
+ | =(list F N)=     |                    |
+ | =(list F)=       |                    |
+ | =(vec F N)=      | =std::array<F, N>= |
+ | =(vec F)=        | =std::vector<F>=   |
  | =(complex F)=    | =std::complex<F>=  |
 
  | Kimia CL type                                                    | C++ intepretation               |
@@ -292,7 +292,7 @@ and something a little bit more challenging
        (concatenate 'string
                     "~a~%"
                     (caster-signature-fmt lang)
-                    "{~%~a~%}"))))
+                    "{~&~a~&}"))))
 
   (defun internal-type-name (type)
     (string-downcase
@@ -342,7 +342,7 @@ and something a little bit more challenging
                                           (caster-envelope-fmt lang)
                                           (funcall caster-header-f ty)
                                           (funcall caster-name-f ty)
-                                          (funcall caster-snippet-f ty))))))
+                                          (indent 2 (funcall caster-snippet-f ty)))))))
     ))
 
 ;; TODO: generalize these funcs
@@ -385,8 +385,8 @@ and something a little bit more challenging
 
 #+begin_src lisp :eval no :noweb-ref test-kimia
 
-(assert-eq (defequiv-var-name :c++ '(vector F N))
-           'vector-3-c++)
+(assert-eq (defequiv-var-name :c++ '(vec F N))
+           'vec-3-c++)
 
 (assert-eq (defequiv-var-name :c '(struct name (vars) (fields)))
            'struct-4-c)
@@ -445,7 +445,7 @@ and something a little bit more challenging
 (assert-equal (caster-snippet :c++ 'double-float)
 "
 size_t cldouble (const cl_object o){
-return (size_t)new double(ecl_to_double(o));
+  return (size_t)new double(ecl_to_double(o));
 }")
 
 #+end_src
@@ -486,7 +486,15 @@ is simply just
 "
 <<vector-cpp-snippet>>")
 
-(defequiv :c++ (vector F)
+(defun vec-p (F v)
+  (every (lambda (x) (typep x F))
+         v))
+
+(deftype vec (F &optional N)
+  `(and (array * (,N)) ; take care of the types in vec
+    (satisfies ,(lambda (x) (vec-p F x)) )))
+
+(defequiv :c++ (vec F)
   :translate (lambda (ty)
                (format nil "std::vector< ~a >"
                        (translate :c++ (cadr ty))))
@@ -500,7 +508,7 @@ is simply just
   :caster-snippet
      <<vector-cpp-caster-snippet>>)
 
-(defequiv :c++ (vector F N)
+(defequiv :c++ (vec F N)
 
   :translate (lambda (ty)
                (format nil "std::array< ~a, ~a >"
@@ -520,44 +528,44 @@ is simply just
 **** Tests
 
 #+begin_src lisp :eval no :noweb-ref test-kimia
-(assert-equal (translate :c++ '(vector double-float))
+(assert-equal (translate :c++ '(vec double-float))
               "std::vector< double >")
-(assert-equal (translate :c++ '(vector (g 5)))
+(assert-equal (translate :c++ '(vec (g 5)))
               "std::vector< _G5 >")
-(assert-equal (translate :c++ '(vector (g 5) 8))
+(assert-equal (translate :c++ '(vec (g 5) 8))
               "std::array< _G5, 8 >")
-(assert-equal (translate :c++ '(vector (vector (vector double-float) 2) 8))
+(assert-equal (translate :c++ '(vec (vec (vec double-float) 2) 8))
               "std::array< std::array< std::vector< double >, 2 >, 8 >")
 
 ;;; CASTING
-(assert-equal (caster-name :c++ '(vector integer 8))
+(assert-equal (caster-name :c++ '(vec integer 8))
               "ar_of_8_clint")
 
-(assert-equal (caster-snippet :c++ '(vector integer))
+(assert-equal (caster-snippet :c++ '(vec integer))
 "size_t clint (const cl_object o);
 size_t v_of_clint (const cl_object o){
-
-std::vector< int > result(ecl_to_int(cl_length(o)));
-for (size_t i=0; i < result.size(); i++) {
-  int *element = (int*)clint(cl_aref(2, o, i));
-  result[i] = *element;
-}
-return (size_t)new std::vector< int >(result);
+  
+  std::vector< int > result(ecl_to_int(cl_length(o)));
+  for (size_t i=0; i < result.size(); i++) {
+    int *element = (int*)clint(cl_aref(2, o, i));
+    result[i] = *element;
+  }
+  return (size_t)new std::vector< int >(result);
 }")
 
-(assert-equal (caster-name :c++ '(vector (vector double-float) 8))
+(assert-equal (caster-name :c++ '(vec (vec double-float) 8))
               "ar_of_8_v_of_cldouble")
 
-(assert-equal (caster-snippet :c++ '(vector (vector double-float) 8))
+(assert-equal (caster-snippet :c++ '(vec (vec double-float) 8))
               "
 size_t ar_of_8_v_of_cldouble (const cl_object o){
-
-std::array< std::vector< double >, 8 > result(ecl_to_int(cl_length(o)));
-for (size_t i=0; i < result.size(); i++) {
-  std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, i));
-  result[i] = *element;
-}
-return (size_t)new std::array< std::vector< double >, 8 >(result);
+  
+  std::array< std::vector< double >, 8 > result(ecl_to_int(cl_length(o)));
+  for (size_t i=0; i < result.size(); i++) {
+    std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, i));
+    result[i] = *element;
+  }
+  return (size_t)new std::array< std::vector< double >, 8 >(result);
 }")
 #+end_src
 
@@ -581,7 +589,7 @@ return (size_t)new std::array< std::vector< double >, 8 >(result);
 #+begin_src lisp :eval no :noweb-ref test-kimia
 (assert (generic-p '(g 5)))
 (assert (generic-p '(g a)))
-(assert (not (generic-p '(vector F))))
+(assert (not (generic-p '(vec F))))
 (assert-equal (translate :c++ '(g a))
               "_GA")
 (assert-equal (translate :c++ '(g 98))
@@ -750,19 +758,16 @@ generic data types:
         (otherwise (get-keys (cdr tail)
                              (cons head rest))))))
 
-
-  (defun struct-check-type (cons-struct ty)
+  (defun struct-check-type (ty cons-struct)
     (check-type cons-struct cons)
     (check-type ty (or struct-spec struct-identifier))
     (let* ((spec (struct-get-expanded-spec ty))
            (fields (struct-spec-fields spec)))
-      (dolist (key (get-keys cons-struct))
-        (let* ((type (find key fields :test
-                           (lambda (k x) (getf x k)))))
-          (print key)
-          (print (typep (getf cons-struct key) (getf type key)))
-          ))
-      ))
+      (notany #'null
+              (mapcar (lambda (key) (let ((type (assoc key fields)))
+                                      (typep (getf cons-struct key)
+                                             (getf type key))))
+                      (get-keys cons-struct)))))
 
   (defun struct-caster-name (ty)
     (let* ((name (struct-spec-name ty))
@@ -841,20 +846,20 @@ generic data types:
 (defgenericstruct
     tensor-reader-double
     ((:name string)
-     (:lens (array double-float))))
+     (:lens (vec double-float))))
 
 (defgenericstruct
     (tensor-reader F)
     ((:name string)
-     (:lens (vector F))))
+     (:lens (vec F))))
 
 (defgenericstruct
     (davidson-solver A B tensor-field D)
     ((:vectorspace A)
-     (:fields (vector B))
-     (:lens (vector tensor-field))
-     (:mask-tensor (vector tensor-field))
-     (:dimension (vector (vector (vector D)) 5))))
+     (:fields (vec B))
+     (:lens (vec tensor-field))
+     (:mask-tensor (vec tensor-field))
+     (:dimension (vec (vec (vec D)) 5))))
 
 (defgenericstruct
     (Uttu F)
@@ -939,8 +944,9 @@ generic data types:
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
 ;; struct-typep
-;(struct-typep '(:name "hello world" :lens #(5d0 9d0 8d0))
-;'(struct tensor-reader-double))
+
+(assert (struct-check-type '(struct tensor-reader-double)
+                           '(:name "hello world" :lens #(5.0d0 9.0d0))))
 #+end_src
 
 
@@ -1158,17 +1164,24 @@ int main () {
 (in-package :kimia)
 
 (defmacro assert-not (thing)
-  `(assert (not ,thing)))
-
-(defmacro assert-eq (one two)
-  `(let ((left-hand ,one)
-         (right-hand ,two))
-     (assert (eq left-hand right-hand))))
+  `(let ((value (not ,thing)))
+     (unless value
+       (princ ',thing)
+       (error "Assertion-not error"))))
 
 (defmacro assert-equal (one two)
-  `(let ((left-hand ,one)
-         (right-hand ,two))
-     (assert (equal left-hand right-hand))))
+  `(let ((value (equal ,one ,two)))
+     (unless value
+       (format t "~%~%~s~%~Tis not equal to ~%~T~s~%~%"
+               ',one ',two)
+       (assert nil))))
+
+(defmacro assert-eq (one two)
+  `(let ((value (eq ,one ,two)))
+     (unless value
+       (format t "~%~%~s~%~Tis not eq to ~%~T~s~%~%"
+               ',one ',two)
+       (assert nil))))
 
 <<test-kimia>>
 ;; <<test-kimia.types>>
