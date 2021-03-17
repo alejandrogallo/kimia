@@ -30,5 +30,11 @@ testcxx: testcxx.cxx libclkimiat.a libclkimia.a
 		-L$(PWD) -lclkimiat -L$(PWD) -lclkimia \
 		-Wl,-Bdynamic $(GMP_LIB) -o $@
 
+test.h: test-data.lisp
+	$(ECL_BIN) --shell ./create-test-headers.lisp | \
+		sed "/^;;/d" | \
+		sed "/s_nil/d" | tee $@
+
+
 clean:
 	-@rm -v testcxx *.a *.fasc *.o

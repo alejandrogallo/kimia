@@ -102,8 +102,8 @@
                     &key
                       translate
                       (declare-var nil)
-                      (define nil)
-                      (satisfies nil)
+                      (define "")
+                      (subtypes nil)
                       (caster-header "")
                       (caster-body "")
                       caster-name
@@ -118,6 +118,7 @@
            (translate (fun-or-scalar translate))
            (caster-header-f (fun-or-scalar caster-header))
            (caster-name-f (fun-or-scalar caster-name))
+           (subtypes-f (fun-or-scalar subtypes))
            (caster-body-f (fun-or-scalar caster-body))
            (caster-snippet-f
              (if caster-snippet
@@ -137,6 +138,7 @@
                '(:translate ,translate
                  :declare-var ,(fun-or-scalar declare-var)
                  :define ,(fun-or-scalar define)
+                 :subtypes ,subtypes-f
                  :caster-header ,caster-header-f
                  :caster-name ,caster-name-f
                  :caster-body ,caster-body-f
@@ -147,6 +149,11 @@
 (defun caster-snippet (lang ty)
   (let ((spec (defequiv-spec lang ty)))
     (funcall (getf spec :caster-snippet) ty)))
+
+(defun subtypes (lang ty)
+  (let* ((spec (defequiv-spec lang ty))
+         (subtypes (funcall (getf spec :subtypes) ty)))
+    subtypes))
 
 (defun caster-body (lang ty)
   (let ((spec (defequiv-spec lang ty)))
@@ -179,14 +186,17 @@
   :caster-body (lambda (ty)
                     (format nil "return (size_t)new int(ecl_to_int(o));"
                             (translate :c++ ty))))
+
 (defequiv :c++ double-float
   :translate "double"
   :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
   :caster-body "return (size_t)new double(ecl_to_double(o));")
+
 (defequiv :c++ single-float
   :translate "float"
   :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
   :caster-body "return (size_t)new float(ecl_to_float(o));")
+
 (defequiv :c++ boolean
   :translate "bool"
   :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
@@ -218,6 +228,8 @@ return (size_t)new ~a(result);")
                (format nil "std::vector< ~a >"
                        (translate :c++ (cadr ty))))
 
+  :subtypes (lambda (ty) `(,(cadr ty)))
+
   :caster-name (lambda (ty)
                  (format nil "v_of_~a"
                          (caster-name :c++ (cadr ty))))
@@ -241,6 +253,8 @@ return (size_t)new ~a(result);")
                (format nil "std::array< ~a, ~a >"
                        (translate :c++ (cadr ty))
                        (caddr ty)))
+
+  :subtypes (lambda (ty) `(,(cadr ty)))
 
   :caster-name (lambda (ty)
                  (format nil "ar_of_~a_~a"
@@ -286,6 +300,7 @@ return (size_t)new ~a(result);")
   :caster-body (lambda (ty) (format nil "return (size_t)(~a*)new ~a(o);"
                                     (translate :c++ ty)
                                     (caster-name :c++ (cadr ty))))
+  :subtypes (lambda (ty) `(,(cadr ty)))
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
   :caster-name (lambda (ty) (format nil "p~a" (caster-name :c++ (cadr ty)))))
 
@@ -294,7 +309,8 @@ return (size_t)new ~a(result);")
 
 (defequiv :c++ (const F)
   :translate (lambda (ty) (format nil "const ~a" (translate :c++ (cadr ty))))
-  :caster-name (lambda (ty) (caster-name :c++ (cadr ty)))
+  :caster-name (lambda (ty) (format nil "c~a" (caster-name :c++ (cadr ty))))
+  :subtypes (lambda (ty) `(,(cadr ty)))
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
   :caster-body (lambda (ty) (caster-body :c++ (cadr ty))))
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -351,6 +367,14 @@ return (size_t)new ~a(result);")
      (format nil "~@:(~A-SPEC~)"
              struct-name)))
 
+  (defun struct-spec-subtypes (spec)
+    (etypecase spec
+      (struct-spec (mapcar #'cadr (struct-spec-fields spec)))
+      (struct-identifier (let* ((name (struct-spec-name spec))
+                                (spec-symbol (struct-spec-symbol name))
+                                (spec (eval spec-symbol)))
+                           (struct-spec-subtypes spec)))))
+
   (defun rec-subst (ls what)
     (check-type ls list)
     (check-type what cons)
@@ -361,8 +385,8 @@ return (size_t)new ~a(result);")
                          (subst (car pair) (cdr pair) what))))))
 
   (defun struct-unnamed-p (ty)
-    (check-type ty (or struct-spec struct-identifier))
-    (null (struct-spec-name ty)))
+    (and (typep ty '(or struct-spec struct-identifier))
+         (null (struct-spec-name ty))))
 
   (defun struct-get-spec (ty)
     (check-type ty (or struct-spec struct-identifier))
@@ -430,7 +454,7 @@ return (size_t)new ~a(result);")
               (c++-var-name vn))))
 
   (defun define-struct-c++ (ty)
-    (format nil "~a;" (translate-struct-c++ ty)))
+    (translate-struct-c++ ty))
 
   (defun get-keys (lst &optional (rest '()))
     "This function just gets every other element
@@ -537,28 +561,26 @@ return (size_t)new ~a(result);")
               constructor)))
 
   (defun struct-caster-header (ty)
-    (let* ((spec (struct-get-expanded-spec ty))
-           (fields (struct-spec-fields spec))
-           (subtypes (mapcar #'cadr fields)))
-      (format nil "~{~a~^~%~}" (mapcar (lambda (x)
-                                         (caster-signature :c++ x))
-                                       subtypes))))
+    (let* ((subtypes (subtypes :c++ ty)))
+      (format nil "~{~a~^~%~}"
+              (mapcar (lambda (x)
+                        (caster-signature :c++ x))
+                      (remove-if #'struct-unnamed-p subtypes)))))
 
   )
 
 (defmacro defgenericstruct (name spec)
   (let* ((spec `(struct ,name ,spec))
          (struct-name (struct-spec-name spec))
-         (spec-gvars (struct-spec-generic-vars spec))
          (struct-spec-var (struct-spec-symbol struct-name)))
     `(progn
-       (defparameter ,struct-spec-var ',spec)
-       )))
+       (defparameter ,struct-spec-var ',spec))))
 
 (defequiv :c++ (struct name)
   :translate (lambda (ty) (translate-struct-c++ ty))
   :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
   :define (lambda (ty) (define-struct-c++ ty))
+  :subtypes #'struct-spec-subtypes
   :caster-name #'struct-caster-name
   :caster-header #'struct-caster-header
   :caster-body #'struct-caster-body)
@@ -568,6 +590,7 @@ return (size_t)new ~a(result);")
   :translate (lambda (ty) (translate-struct-c++ ty))
   :declare-var (lambda (ty vn) (declare-var-struct-c++ ty vn))
   :define (lambda (ty) (define-struct-c++ ty))
+  :subtypes #'struct-spec-subtypes
   :caster-name #'struct-caster-name
   :caster-header #'struct-caster-header
   :caster-body #'struct-caster-body)

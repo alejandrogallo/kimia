@@ -7,6 +7,7 @@
 #include <iterator>
 #include <cwchar>
 #include <ecl/ecl.h>
+#include "test.h"
 
 extern "C" void init_clkimia(cl_object);
 extern "C" void init_clkimiat(cl_object);
