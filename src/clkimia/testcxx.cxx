@@ -9,6 +9,8 @@
 #include <ecl/ecl.h>
 #include "test.h"
 
+#define LISP(...) lisp::fromStr(#__VA_ARGS__)
+
 extern "C" void init_clkimia(cl_object);
 extern "C" void init_clkimiat(cl_object);
 
@@ -56,10 +58,26 @@ int main (int argc, char **argv) {
   cl_object o(lisp::eval("#(42 43 44)"));
 
   auto a(*(std::vector<int>*)v_of_clint(lisp::fromStr("#(59 48 987)")));
-  auto b(*(std::vector<double>*)v_of_cldouble(lisp::fromStr("#(59.5d0 48.5d0 987d0)")));
+  auto b(*(std::vector<double>*)v_of_cldouble(lisp::fromStr("#(59.5d0 48.5d0 987.5d0)")));
+  auto pa(*(std::vector<int>**)pv_of_clint(lisp::fromStr("#(59 48 987)")));
 
   for (auto i: a) std::cout << i << std::endl;
   for (auto i: b) std::cout << i << std::endl;
+  for (auto i: *pa) std::cout << i << std::endl;
+
+  cl_object reader_lisp
+    = LISP( (:name "hello world my name is alejandro"
+             :lens #(5 9 8 9.6))
+           );
+
+  auto reader(*(TensorReaderDouble*)s_tensor_reader_double(reader_lisp));
+  std::cout << reader.name << std::endl;
+  for (auto i: reader.lens) {
+    std::cout << i + 10.1 << std::endl;
+  }
+
+
+
 
 
   return 0;
