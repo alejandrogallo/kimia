@@ -1191,13 +1191,13 @@ struct Uttu {
 };")
 
 (assert-equal (caster-signature :c++ '(struct (uttu integer)))
-              "size_t s_uttu_of_clint (const cl_object o);")
+              "size_t s_uttu_with_clint (const cl_object o);")
 
 (assert-equal (caster-snippet :c++ '(struct (uttu integer)))
 "size_t clint (const cl_object o);
-size_t s_uttu_of_clint (const cl_object o){
+size_t s_uttu_with_clint (const cl_object o){
   return (size_t)new Uttu< int >{
-    ,*(int*)clint(cl_getf(2, o, c_string_to_object(\":NAME\")))
+    *(int*)clint(cl_getf(2, o, c_string_to_object(\":NAME\")))
   };
 }")
 
