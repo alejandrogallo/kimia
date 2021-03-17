@@ -482,7 +482,7 @@ and something a little bit more challenging
 ;; TODO: caster body
 (defequiv :c++ string
   :translate "std::string"
-  :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty))))
+  :caster-name "clstr")
 #+end_src
 
 **** Tests                                                         :noexport:
@@ -661,12 +661,13 @@ Also pointers and const qualifiers have to be implemented.
 
 #+begin_src lisp :noweb-ref kimia.codegen :results none
 (defun pointer-p (ty ps)
-  (let ((value (cadr ps)))
-    (etypecase value
-      (symbol (if (boundp value)
-                  (typep (eval value) ty)
-                  t))
-      (t (typep value ty)))))
+  (and (eq (car ps) 'pointer)
+       (let ((value (cadr ps)))
+         (etypecase value
+           (symbol (if (boundp value)
+                       (typep (eval value) ty)
+                       t))
+           (t (typep value ty))))))
 
 (deftype pointer (type-pointed-to)
   `(and cons
@@ -914,34 +915,82 @@ generic data types:
   (defun struct-caster-name (ty)
     (let* ((name (struct-spec-name ty))
            (spec (struct-get-expanded-spec ty))
+           (gvars (struct-spec-generic-vars spec))
+           (is-unnamed (struct-unnamed-p ty))
            (subtypes (mapcar #'cadr (struct-spec-fields spec)))
            (is-generic (struct-spec-generic-p spec)))
       (when is-generic (error "Cannot create a caster for generic struct"))
-      (format nil "s_~a_of_~{~a~^_and_~}"
-              (c-var-name (or name "unnammed"))
-              (mapcar (lambda (x) (caster-name :c++ x)) subtypes))))
+      ;(when is-unnamed (error "Can't create a caster name for unnamed structs"))
+      (if gvars
+          (format nil "s_~a_with_~{~a~^_and_~}"
+              (c-var-name name)
+              (mapcar (lambda (x) (caster-name :c++ x)) gvars))
+          (format nil "s_~a" (c-var-name name)))))
 
-  (defun struct-caster-body (ty)
-    (let* ((name (struct-spec-name ty))
-           (spec (struct-get-expanded-spec ty))
-           (fields (struct-spec-fields spec))
+  (defun struct-caster-body-of-unnamed-struct (spec parent-key
+                                               &key (cl-object "o"))
+    (format nil
+            "{~&~{~&~a~^,~}~&} /* unnamed */"
+            (struct-caster-body-from-subtypes
+             spec
+             :cl-object
+             (format nil
+                     "cl_getf(2, ~a, c_string_to_object(\"~s\"))"
+                     cl-object
+                     parent-key))))
+
+  (defun struct-caster-body-from-subtypes (spec &key (cl-object "o"))
+    (check-type spec struct-spec)
+    (let* ((fields (struct-spec-fields spec))
            (subtypes (mapcar #'cadr fields))
            (format-arguments
-             (mapcar (lambda (x y z) `(,x ,y ,z))
+             (mapcar (lambda (ty x y z) `(,ty
+                                          ,x
+                                          ,y
+                                          ,z))
+                     subtypes
                      (mapcar (lambda (x) (translate :c++ x)) subtypes)
                      (mapcar (lambda (x) (caster-name :c++ x)) subtypes)
-                     (mapcar (lambda (x) (car x)) fields)))
+                     (mapcar (lambda (x) (car x)) fields)
+                     ))
            (is-generic (struct-spec-generic-p spec))
-           (constructor
-             (mapcar
-              (lambda (x)
-                (format nil
-                        "~?"
-                        "*(~a*)~a(cl_getf(2, o, c_string_to_object(\"~s\")))"
-                        x))
-              format-arguments)))
+           (is-unnamed (struct-unnamed-p spec)))
+      (mapcar (lambda (x)
+                (cond
+                  ;; Check for const unnamed structs
+                  ((and (consp (car x))
+                        (eq (caar x) 'const)
+                        (typep (cadar x) '(or struct-identifier struct-spec))
+                        (struct-unnamed-p (cadar x)))
+                   (indent 2 (struct-caster-body-of-unnamed-struct
+                              (cadar x) (cadddr x) :cl-object cl-object)))
+                  ;; What happens if we have an unnamed struct??
+                  ;; we can not really have a caster function
+                  ;; in general for those
+                  ((and (typep (car x) 'struct-spec)
+                        (struct-unnamed-p (car x)))
+                   (indent 2 (struct-caster-body-of-unnamed-struct
+                              (car x) (cadddr x) :cl-object cl-object)))
+                  ;; Regular types
+                  (t (format
+                      nil
+                      (format
+                       nil
+                       "~?"
+                       ;; v------ignore first x   v--- cl-object
+                       "  ~**(~a*)~a(cl_getf(2, ~~a, c_string_to_object(\"~s\")))"
+                       ;;          ^--caster name          struct key -----^
+                       x)
+                      cl-object))))
+              format-arguments)
+      ))
+
+  (defun struct-caster-body (ty)
+    (let* ((spec (struct-get-expanded-spec ty))
+           (is-generic (struct-spec-generic-p spec))
+           (constructor (struct-caster-body-from-subtypes spec)))
       (when is-generic (error "Cannot create a caster for generic struct"))
-      (format nil "return (size_t)new ~a{~%~{  ~a~^, ~%~}~%};"
+      (format nil "return (size_t)new ~a{~&~{~&~a~^,~}~&};"
               (struct-pre-var-c++ spec)
               constructor)))
 
@@ -1025,12 +1074,21 @@ generic data types:
      (:author (struct nil ((:name string))))
      (:lens (struct with-unnamed))))
 
+;; this example is the MONSTER-STRUCT
 (defgenericstruct
-    (monster-struct A B)
+    (monster-struct A B C)
     ((:name string)
      (:data (pointer (vec (const A))))
-     (:connection (struct (nil A) ((:ip A)
-                                   (:timeout B))))
+     (:connection (struct nil ((:ip (struct nil
+                                            ((:ipv4 A)
+                                             (:ipv6 integer))))
+                               (:timeout B))))
+     (:components (struct nil
+                          ((:pphh (vec A))
+                           (:pppp (vec A))
+                           (:hhhh (vec A))
+                           (:lens (const (vec A))))))
+     (:in (const (struct nil ((:date (pointer C))))))
      (:lens (vec B))))
 
 (assert tensor-reader-double-spec)
@@ -1114,6 +1172,10 @@ generic data types:
 (assert-not (typep '(:name 654.5d0)
                    '(struct (Uttu integer))))
 
+(assert (typep '(struct (Uttu integer))
+               'struct-identifier))
+(assert-not (typep '(struct (Uttu integer))
+                   'struct-spec))
 
 ;;;;; CODE GENERATION
 (assert-equal
@@ -1139,6 +1201,77 @@ size_t s_uttu_of_clint (const cl_object o){
   };
 }")
 
+
+(assert-equal (translate :c++ '(struct (monster-struct (g DA) (g OI) (g vec ))))
+"template < typename _GDA, typename _GOI, typename _GVEC >
+struct MonsterStruct {
+  std::string name;
+  std::vector< const _GDA >* data;
+  struct  {
+    struct  {
+      _GDA ipv4;
+      int ipv6;
+    } ip;
+    _GOI timeout;
+  } connection;
+  struct  {
+    std::vector< _GDA > pphh;
+    std::vector< _GDA > pppp;
+    std::vector< _GDA > hhhh;
+    const std::vector< _GDA > lens;
+  } components;
+  const struct  {
+    _GVEC* date;
+  } in;
+  std::vector< _GOI > lens;
+};")
+
+(assert-equal
+ (translate :c++ '(struct (monster-struct integer double-float single-float)))
+ "template
+struct MonsterStruct< int, double, float >;")
+
+(typep '(pointer (struct monster-struct))
+       '(or (pointer struct-identifier) (pointer struct-spec)))
+
+(typep '(const (struct monster-struct))
+       '(or (const struct-identifier) (const struct-spec)))
+
+(assert-equal
+ (caster-snippet :c++ '(struct (monster-struct integer double-float single-float)))
+"size_t clstr (const cl_object o);
+size_t pv_of_clint (const cl_object o);
+size_t s_nil (const cl_object o);
+size_t s_nil (const cl_object o);
+size_t s_nil (const cl_object o);
+size_t v_of_cldouble (const cl_object o);
+size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
+  return (size_t)new MonsterStruct< int, double, float >{
+    ,*(std::string*)clstr(cl_getf(2, o, c_string_to_object(\":NAME\"))),
+    ,*(std::vector< const int >**)pv_of_clint(cl_getf(2, o, c_string_to_object(\":DATA\"))),
+    {
+      {
+        ,*(int*)clint(cl_getf(2, cl_getf(2, cl_getf(2, o, c_string_to_object(\":CONNECTION\")), c_string_to_object(\":IP\")), c_string_to_object(\":IPV4\"))),
+        ,*(int*)clint(cl_getf(2, cl_getf(2, cl_getf(2, o, c_string_to_object(\":CONNECTION\")), c_string_to_object(\":IP\")), c_string_to_object(\":IPV6\")))
+      } /* unnamed */
+    ,
+      ,*(double*)cldouble(cl_getf(2, cl_getf(2, o, c_string_to_object(\":CONNECTION\")), c_string_to_object(\":TIMEOUT\")))
+    } /* unnamed */
+  ,
+    {
+      ,*(std::vector< int >*)v_of_clint(cl_getf(2, cl_getf(2, o, c_string_to_object(\":COMPONENTS\")), c_string_to_object(\":PPHH\"))),
+      ,*(std::vector< int >*)v_of_clint(cl_getf(2, cl_getf(2, o, c_string_to_object(\":COMPONENTS\")), c_string_to_object(\":PPPP\"))),
+      ,*(std::vector< int >*)v_of_clint(cl_getf(2, cl_getf(2, o, c_string_to_object(\":COMPONENTS\")), c_string_to_object(\":HHHH\"))),
+      ,*(const std::vector< int >*)v_of_clint(cl_getf(2, cl_getf(2, o, c_string_to_object(\":COMPONENTS\")), c_string_to_object(\":LENS\")))
+    } /* unnamed */
+  ,
+    {
+      ,*(float**)pclfloat(cl_getf(2, cl_getf(2, o, c_string_to_object(\":IN\")), c_string_to_object(\":DATE\")))
+    } /* unnamed */
+  ,
+    ,*(std::vector< double >*)v_of_cldouble(cl_getf(2, o, c_string_to_object(\":LENS\")))
+  };
+}")
 #+end_src
 
 
