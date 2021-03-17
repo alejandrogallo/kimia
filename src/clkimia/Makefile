@@ -1,4 +1,4 @@
-test: tcxx
+test: testcxx
 
 
 CONFIG = gcc
@@ -9,10 +9,13 @@ ECL_INCLUDE    ?= -I${ECL_BUILD_PATH}/include
 ECL_LIB        ?= -L${ECL_BUILD_PATH}/lib -lecl -leclffi -leclgc -leclatomic
 GMP_LIB ?= -L$(GMP_PATH) -lgmp
 
+t.o: t.lisp
+	$(ECL_BIN) --load kimia.lisp --shell lisp-to-obj.lisp -i t.lisp
+
 %.o: %.lisp
 	$(ECL_BIN) --shell lisp-to-obj.lisp -i $<
 
-libclkimiat.a: t.o kimia.o libclkimia.a
+libclkimiat.a: t.o kimia.o
 	$(ECL_BIN) \
 		--shell create-static-library.lisp \
 		-i t.o -o clkimiat.a --init init_clkimiat
@@ -22,10 +25,10 @@ libclkimia.a: kimia.o
 		--shell create-static-library.lisp \
 		-i kimia.o -o clkimia.a --init init_clkimia
 
-tcxx: t.cxx libclkimiat.a libclkimia.a
+testcxx: testcxx.cxx libclkimiat.a libclkimia.a
 	mpic++ $(ECL_INCLUDE) $< -Wl,-Bstatic $(ECL_LIB) \
 		-L$(PWD) -lclkimiat -L$(PWD) -lclkimia \
 		-Wl,-Bdynamic $(GMP_LIB) -o $@
 
 clean:
-	-@rm -v tcxx *.a *.fasc *.o
+	-@rm -v testcxx *.a *.fasc *.o
