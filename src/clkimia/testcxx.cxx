@@ -42,9 +42,10 @@ int main (int argc, char **argv) {
 
   lisp::initialize(argc, argv);
 
-  output = cl_safe_eval(c_string_to_object(":penis"), Cnil, Cnil);
-  lisp::eval("(require :kimia)");
-  lisp::eval("(kimia::wrap-input-script (assert-eq 'a 'a))");
+  //output = cl_safe_eval(c_string_to_object(":penis"), Cnil, Cnil);
+  //lisp::eval("(in-package :kimia)");
+  //lisp::eval("(kimia::wrap-input-script (assert-eq 'a 'a))");
+  lisp::eval("(princ (translate :c++ '(struct tensor-reader-double)))");
   std::cout << "what is happending" << std::endl;
 
   return 0;
