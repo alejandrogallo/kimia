@@ -39,15 +39,28 @@ namespace lisp {
 
 
 int main (int argc, char **argv) {
-  cl_object output;
+  //cl_object output;
 
   lisp::initialize(argc, argv);
 
   //output = cl_safe_eval(c_string_to_object(":penis"), Cnil, Cnil);
   //lisp::eval("(in-package :kimia)");
   //lisp::eval("(kimia::wrap-input-script (assert-eq 'a 'a))");
-  lisp::eval("(princ (translate :c++ '(struct tensor-reader-double)))");
+  //lisp::eval("(princ (translate :c++ '(struct tensor-reader-double)))");
   std::cout << "what is happending" << std::endl;
+
+  cl_print(1, lisp::eval("#(1 5 6)"));
+  cl_print(1, lisp::eval("(type-of #(1 5 6))"));
+  cl_print(1, lisp::eval("(length #(1 5 6))"));
+  cl_print(1, lisp::eval("(aref #(1 5 6) 0)"));
+  cl_object o(lisp::eval("#(42 43 44)"));
+
+  auto a(*(std::vector<int>*)v_of_clint(lisp::fromStr("#(59 48 987)")));
+  auto b(*(std::vector<double>*)v_of_cldouble(lisp::fromStr("#(59.5d0 48.5d0 987d0)")));
+
+  for (auto i: a) std::cout << i << std::endl;
+  for (auto i: b) std::cout << i << std::endl;
+
 
   return 0;
 }

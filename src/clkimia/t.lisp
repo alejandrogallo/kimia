@@ -292,7 +292,7 @@ size_t s_uttu_with_clint (const cl_object o){
 "template < typename _GDA, typename _GOI, typename _GVEC >
 struct MonsterStruct {
   std::string name;
-  std::vector< const _GDA >* data;
+  std::vector< _GDA >* data;
   struct  {
     struct  {
       _GDA ipv4;
@@ -334,7 +334,7 @@ size_t v_of_cldouble (const cl_object o);
 size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
   return (size_t)new MonsterStruct< int, double, float >{
     *(std::string*)clstr(cl_getf(2, o, c_string_to_object(\":NAME\"))),
-    *(std::vector< const int >**)pv_of_clint(cl_getf(2, o, c_string_to_object(\":DATA\"))),
+    *(std::vector< int >**)pv_of_clint(cl_getf(2, o, c_string_to_object(\":DATA\"))),
     {
       {
         *(int*)clint(cl_getf(2, cl_getf(2, cl_getf(2, o, c_string_to_object(\":CONNECTION\")), c_string_to_object(\":IP\")), c_string_to_object(\":IPV4\"))),

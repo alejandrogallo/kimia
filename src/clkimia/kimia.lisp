@@ -297,8 +297,7 @@ return (size_t)new ~a(result);")
 ;; TODO: create the real caster body
 (defequiv :c++ (pointer F)
   :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
-  :caster-body (lambda (ty) (format nil "return (size_t)(~a*)new ~a(o);"
-                                    (translate :c++ ty)
+  :caster-body (lambda (ty) (format nil "return (size_t)new size_t(~a(o));"
                                     (caster-name :c++ (cadr ty))))
   :subtypes (lambda (ty) `(,(cadr ty)))
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))

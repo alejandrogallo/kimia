@@ -26,7 +26,8 @@ libclkimia.a: kimia.o
 		-i kimia.o -o clkimia.a --init init_clkimia
 
 testcxx: testcxx.cxx libclkimiat.a libclkimia.a
-	mpic++ $(ECL_INCLUDE) $< -Wl,-Bstatic $(ECL_LIB) \
+	mpic++ -pedantic -Wall \
+		$(ECL_INCLUDE) $< -Wl,-Bstatic $(ECL_LIB) \
 		-L$(PWD) -lclkimiat -L$(PWD) -lclkimia \
 		-Wl,-Bdynamic $(GMP_LIB) -o $@
 

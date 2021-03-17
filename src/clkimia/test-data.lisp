@@ -36,7 +36,7 @@
 (defgenericstruct
     (monster-struct A B C)
     ((:name string)
-     (:data (pointer (vec (const A))))
+     (:data (pointer (vec A)))
      (:connection (struct nil ((:ip (struct nil
                                             ((:ipv4 A)
                                              (:ipv6 integer))))
