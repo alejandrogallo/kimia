@@ -65,6 +65,7 @@ int main (int argc, char **argv) {
   for (auto i: b) std::cout << i << std::endl;
   for (auto i: *pa) std::cout << i << std::endl;
 
+
   cl_object reader_lisp
     = LISP( (:name "hello world my name is alejandro"
              :lens #(5 9 8 9.6))
