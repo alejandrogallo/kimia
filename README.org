@@ -78,6 +78,28 @@ order.
                   (coerce (make-array n :initial-element sep) 'string)
                   "~%")
           (lines str)))
+
+(eval-when (:compile-toplevel :load-toplevel)
+
+  (defun plist-keys (lst &optional (rest '()))
+    "This function just gets every other element"
+    (check-type lst (or cons null))
+    (let ((head (car lst))
+          (tail (cdr lst)))
+      (case tail
+        ((nil) (reverse rest))
+        (otherwise (plist-keys (cdr tail)
+                             (cons head rest))))))
+
+
+  (defun consume-in-out (lst &optional (tail '()))
+    (let ((first (car lst))
+          (rest (cdr lst)))
+      (cond
+        ((eq first :out) `(,(reverse tail) ,rest))
+        ((eq first :in) (consume-in-out rest tail))
+        ((eq lst '()) `(,(reverse tail) ,rest))
+        (t (consume-in-out rest (cons first tail)))))))
 #+end_src
 
 #+RESULTS:
@@ -331,7 +353,7 @@ and something a little bit more challenging
                                         ,thing))))))
     (let* ((new-spec-name (defequiv-var-name lang type))
            (spec (copy-seq (defequiv-spec lang from)))
-           (keys (get-keys args)))
+           (keys (plist-keys args)))
       (dolist (key keys)
         (unless (null (getf args key))
           (setf (getf spec key) (fun-or-scalar (getf args key)))))
@@ -918,17 +940,6 @@ generic data types:
   (defun define-struct-c++ (ty)
     (translate-struct-c++ ty))
 
-  (defun get-keys (lst &optional (rest '()))
-    "This function just gets every other element
-  "
-    (check-type lst (or cons null))
-    (let ((head (car lst))
-          (tail (cdr lst)))
-      (case tail
-        ((nil) (reverse rest))
-        (otherwise (get-keys (cdr tail)
-                             (cons head rest))))))
-
   (defun struct-check-type (ty cons-struct)
     (check-type cons-struct cons)
     (check-type ty (or struct-spec struct-identifier))
@@ -938,7 +949,7 @@ generic data types:
               (mapcar (lambda (key) (let ((type (assoc key fields)))
                                       (typep (getf cons-struct key)
                                              (getf type key))))
-                      (get-keys cons-struct)))))
+                      (plist-keys cons-struct)))))
 
   (defun struct-caster-name (ty)
     (let* ((name (struct-spec-name ty))
@@ -1178,10 +1189,10 @@ generic data types:
 (assert-not (struct-spec-generic-p
              '(struct (davidson-solver integer string integer integer))))
 
-;; get-keys
-(assert-equal (get-keys '(:asdf 5 :err 98))
+;; plist-keys
+(assert-equal (plist-keys '(:asdf 5 :err 98))
               '(:asdf :err))
-(assert-equal (get-keys '(:asdf 5 :err))
+(assert-equal (plist-keys '(:asdf 5 :err))
               '(:asdf))
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
@@ -1557,7 +1568,9 @@ the following
 #+end_src
 
 however it is quite unnatural to use =const= modifiers and template
-variables within the =yaml= syntax scope.
+variables within the =yaml= syntax scope. Additionally, adding metadata
+such as a required field, documentation, default and more can become quite burdensome
+to write by hand and to read.
 
 An added difficutly is that =yaml= or similar structred languages
 do not support any kind of type checking infrastrcture, where then
@@ -1571,19 +1584,11 @@ structures according to the spec, let CL typecheck the input settings
 and generate simple C++ code to convert these CL structures into
 their corresponding C++ structures.
 
-
-
-
-*** General idea for defining steps
-
-  To set things in perspective, we would like to define a
-  =TensorReader.lisp= file alongside =TensorReader.h= and
-  =TensorReader.cxx=
-  with the specification of this step, it should look something like this
+Such a CL spec could look like this
 
   #+begin_src lisp :eval no :noweb-ref defstep-tensor-reader-example
-(defstep tensor-reader
-  :in
+(defstep (tensor-reader F)
+:in
   (:name :file
    :type string
    :default "input.dat"
@@ -1594,17 +1599,14 @@ their corresponding C++ structures.
    :default :binary
    :required t
    :doc "The encoding and format that the tensor is written in")
-  :out
+:out
   (:name :tensor
-   :type string
-   :default "out.tensor"
-   :required t
-   :doc "The file where the tensor is located"))
-
+   :type (tensor F)
+   :doc "The file where the tensor is located")
+:run
+  ("runTensorReader" F))
   #+end_src
 
-  and every item in the =:in= or =:out= fields
-  is therefore a =step-setting-spec=.
 
 *** Setting spec
 We would like to define exactly what a setting specification (setting spec)
@@ -1681,27 +1683,10 @@ to have proper lists as the value of the =:in= keyword,
 so we need a function parsing exactly the =:in= part
 and the =:out= part from a list
 
- #+begin_src lisp :noweb-ref kimia.types
-(eval-when (:compile-toplevel :load-toplevel)
-  (defun consume-in-out (lst &optional (tail '()))
-    (let ((first (car lst))
-          (rest (cdr lst)))
-      (cond
-        ((eq first :out) `(,(reverse tail) ,rest))
-        ((eq first :in) (consume-in-out rest tail))
-        ((eq lst '()) `(,(reverse tail) ,rest))
-        (t (consume-in-out rest (cons first tail)))))))
-
-
-
-#+end_src
-
-#+RESULTS:
-: GET-KEYS
 
 We still need the definition of a step.
 
-#+begin_src lisp :noweb-ref kimia.types
+#+begin_src lisp :noweb-ref kimia.types :results none
 (defun step-setting-typep (setting-pair setting-spec-list)
   (let* ((key (car setting-pair))
          (value (getf setting-pair key))
@@ -1766,9 +1751,9 @@ We still need the definition of a step.
          (check-type thing cons)
          (let* ((-name (getf thing :name))
                 (-in (getf thing :in))
-                (-in-keys (get-keys -in))
+                (-in-keys (plist-keys -in))
                 (-out (getf thing :out))
-                (-out-keys (get-keys -out))
+                (-out-keys (plist-keys -out))
                 (spec (,spec-fun-name))
                 (spec-name (getf spec :name))
                 (spec-in (getf spec :in))
@@ -1789,9 +1774,6 @@ We still need the definition of a step.
          '(satisfies ,type-predicate-name)))))
  #+end_src
 
- #+RESULTS:
- : DEFSTEP
-
  For instance we can use this macro in the followig manner
 
  #+begin_src lisp :noweb yes :noweb-ref test-kimia.types :eval no
@@ -1800,9 +1782,6 @@ We still need the definition of a step.
 (check-type (tensor-reader-default)
             tensor-reader)
  #+end_src
-
- #+RESULTS:
- : NIL
 
  and we can make sure that it woks for example as
 
@@ -1835,8 +1814,6 @@ which we can use like
   (eval `(check-step-type ,step)))
 #+end_src
 
-#+RESULTS:
-: NIL
 
 *** Making steps
 
@@ -1892,6 +1869,8 @@ steps
  :out
  :tensor "Whatever")
  #+end_src
+
+
 ** Testing
 Let us define a poor man's test unit framework
 #+begin_src lisp :tangle src/clkimia/test-data.lisp :eval no :noweb no-export
