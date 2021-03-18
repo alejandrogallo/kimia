@@ -59,11 +59,11 @@ int main (int argc, char **argv) {
 
   auto a(*(std::vector<int>*)v_of_clint(lisp::fromStr("#(59 48 987)")));
   auto b(*(std::vector<double>*)v_of_cldouble(lisp::fromStr("#(59.5d0 48.5d0 987.5d0)")));
-  auto pa(*(std::vector<int>**)pv_of_clint(lisp::fromStr("#(59 48 987)")));
+  //auto pa(*(std::vector<int>**)pv_of_clint(lisp::fromStr("#(59 48 987)")));
 
   for (auto i: a) std::cout << i << std::endl;
   for (auto i: b) std::cout << i << std::endl;
-  for (auto i: *pa) std::cout << i << std::endl;
+  //for (auto i: *pa) std::cout << i << std::endl;
 
 
   cl_object reader_lisp

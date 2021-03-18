@@ -528,8 +528,8 @@ and something a little bit more challenging
 
 This is the cpp snippet to convert a common lisp vector into
 another vector
-#+begin_src cpp :noweb-ref vector-cpp-body
-~a result(ecl_to_int(cl_length(o)));
+#+begin_src cpp :noweb-ref vector-cpp-body :eval no
+~a result~a;
 for (size_t i=0; i < result.size(); i++) {
   cl_object index(c_string_to_object(std::to_string(i).c_str()));
   ~a *element = (~a*)~a(cl_aref(2, o, index));
@@ -538,27 +538,24 @@ for (size_t i=0; i < result.size(); i++) {
 return (size_t)new ~a(result);
 #+end_src
 
-#+RESULTS:
-
-where then the =caster-body=
-is simply just
-#+begin_src lisp :noweb-ref vector-cpp-caster-body :eval no
-(lambda (ty)
-  (format nil
-          +c++-vector-body+
-          (translate :c++ ty)
-          (translate :c++ (cadr ty))
-          (translate :c++ (cadr ty))
-          (caster-name :c++ (cadr ty))
-          (translate :c++ ty)
-          ))
-#+end_src
-
+and for the main definitions
 
 #+begin_src lisp :noweb-ref kimia.codegen :noweb no-export :results none
 (defparameter +c++-vector-body+
-"
+"~
 <<vector-cpp-body>>")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun vector-body-c++ (ty &key (array nil))
+    (format nil
+            +c++-vector-body+
+            (translate :c++ ty)
+            (if array "" "(ecl_to_int(cl_length(o)))")
+            (translate :c++ (cadr ty))
+            (translate :c++ (cadr ty))
+            (caster-name :c++ (cadr ty))
+            (translate :c++ ty))))
+
 
 (defun vec-p (F v)
   (every (lambda (x) (typep x F))
@@ -581,8 +578,7 @@ is simply just
 
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
 
-  :caster-body
-     <<vector-cpp-caster-body>>)
+  :caster-body #'vector-body-c++)
 
 (defequiv :c++ (vec F N)
 
@@ -598,7 +594,8 @@ is simply just
                          (caddr ty)
                          (caster-name :c++ (cadr ty))))
   :caster-body
-     <<vector-cpp-caster-body>>)
+  (lambda (ty)
+    (vector-body-c++ ty :array t)))
 
 
 #+end_src
@@ -622,10 +619,10 @@ is simply just
 (assert-equal (caster-snippet :c++ '(vec integer))
 "size_t clint (const cl_object o);
 size_t v_of_clint (const cl_object o){
-  
   std::vector< int > result(ecl_to_int(cl_length(o)));
   for (size_t i=0; i < result.size(); i++) {
-    int *element = (int*)clint(cl_aref(2, o, i));
+    cl_object index(c_string_to_object(std::to_string(i).c_str()));
+    int *element = (int*)clint(cl_aref(2, o, index));
     result[i] = *element;
   }
   return (size_t)new std::vector< int >(result);
@@ -636,10 +633,10 @@ size_t v_of_clint (const cl_object o){
 
 (assert-equal (caster-snippet :c++ '(vec (vec double-float) 8))
 "size_t ar_of_8_v_of_cldouble (const cl_object o){
-  
-  std::array< std::vector< double >, 8 > result(ecl_to_int(cl_length(o)));
+  std::array< std::vector< double >, 8 > result;
   for (size_t i=0; i < result.size(); i++) {
-    std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, i));
+    cl_object index(c_string_to_object(std::to_string(i).c_str()));
+    std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, index));
     result[i] = *element;
   }
   return (size_t)new std::array< std::vector< double >, 8 >(result);
@@ -1353,13 +1350,13 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
 #+end_src
 
 #+RESULTS:
-: (:TRANSLATE #<bytecompiled-function 0x3664190> :DECLARE-VAR
-:  #<bytecompiled-function 0x3664e10> :DEFINE #<bytecompiled-function 0x3664eb0>
-:  :SUBTYPES #<bytecompiled-function 0x3435500> :CASTER-HEADER
-:  #<bytecompiled-function 0x3664050> :CASTER-NAME
-:  #<bytecompiled-function 0x3664000> :CASTER-BODY
-:  #<bytecompiled-function 0x3664a50> :CASTER-SNIPPET
-:  #<bytecompiled-closure #<bytecompiled-function 0x85d42d0>>)
+: (:TRANSLATE #<bytecompiled-function 0x3f34cd0> :DECLARE-VAR
+:  #<bytecompiled-function 0x4264550> :DEFINE #<bytecompiled-function 0x4264460>
+:  :SUBTYPES #<bytecompiled-function 0x42f90f0> :CASTER-HEADER
+:  #<bytecompiled-function 0x42f9000> :CASTER-NAME
+:  #<bytecompiled-function 0x42f90a0> :CASTER-BODY
+:  #<bytecompiled-function 0x42f9140> :CASTER-SNIPPET
+:  #<bytecompiled-closure #<bytecompiled-function 0x48d54b0>>)
 
 
 

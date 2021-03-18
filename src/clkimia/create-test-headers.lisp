@@ -6,6 +6,14 @@
 
 (defparameter *structs-to-export*
       '(tensor-reader-double
+        (tensor-reader integer)
+        (tensor-reader double-float)
+        (tensor-reader single-float)
+        (tensor-reader (vec integer))
+        (Uttu string)
+        (Uttu (vec string))
+        ;(Uttu (struct (Uttu string)))
+        (davidson-solver integer double-float double-float integer)
         (monster-struct integer double-float integer)
         ))
 
@@ -40,7 +48,7 @@
          (safe-gvars (mapcar (lambda (g)
                                (if (generic-p g)
                                    g
-                                   `(g ,g)))
+                                   `(g ,(c++-type-name g))))
                              gvars))
          (subst-list (pairlis safe-gvars gvars)))
     ;(format t "~&//gvars: ~a" gvars)

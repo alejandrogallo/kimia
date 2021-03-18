@@ -25,13 +25,13 @@ libclkimia.a: kimia.o
 		--shell create-static-library.lisp \
 		-i kimia.o -o clkimia.a --init init_clkimia
 
-testcxx: testcxx.cxx libclkimiat.a libclkimia.a
+testcxx: testcxx.cxx test.h libclkimiat.a libclkimia.a
 	mpic++ -pedantic -Wall \
 		$(ECL_INCLUDE) $< -Wl,-Bstatic $(ECL_LIB) \
 		-L$(PWD) -lclkimiat -L$(PWD) -lclkimia \
 		-Wl,-Bdynamic $(GMP_LIB) -o $@
 
-test.h: test-data.lisp
+test.h: test-data.lisp kimia.lisp create-test-headers.lisp
 	$(ECL_BIN) --shell ./create-test-headers.lisp | \
 		sed "/^;;/d" | \
 		sed "/s_nil/d" | tee $@

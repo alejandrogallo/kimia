@@ -217,14 +217,13 @@
 
   :caster-name "clstr")
 (defparameter +c++-vector-body+
-"
-~a result(ecl_to_int(cl_length(o)));
-for (size_t i=0; i < result.size(); i++) {
-  cl_object index(c_string_to_object(std::to_string(i).c_str()));
-  ~a *element = (~a*)~a(cl_aref(2, o, index));
-  result[i] = *element;
-}
-return (size_t)new ~a(result);")
+"~a result(ecl_to_int(cl_length(o)));
+"for (size_t i=0; i < result.size(); i++) {
+"  cl_object index(c_string_to_object(std::to_string(i).c_str()));
+"  ~a *element = (~a*)~a(cl_aref(2, o, index));
+"  result[i] = *element;
+"}
+"return (size_t)new ~a(result);")
 
 (defun vec-p (F v)
   (every (lambda (x) (typep x F))
