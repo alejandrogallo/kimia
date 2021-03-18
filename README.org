@@ -1504,14 +1504,84 @@ int main () {
  |          2 |        |         |
  
 ** TODO The step
-*** The Step
-**** General idea for defining steps
-   To set things in perspective, we would like to define a
-   =TensorReader.lisp= file alongside =TensorReader.h= and
-   =TensorReader.cxx=
-   with the specification of this step, it should look something like this
+*** Introduction
+The main idea of this library is to make easily available
+the writing of specifications for algorithm bodies or steps
+in a bigger calculation.
 
-   #+begin_src lisp :eval no :noweb-ref defstep-tensor-reader-example
+A step in the host language, let us say C++ from now on, will
+consist of a =struct= representing the input and outputs
+of the algorithms and a function accepting as an input solely
+this structure and returning =void=. Let us suppose we have
+a step in our program which consists in readin a tensor of
+datatype =Tensor<F>= where =F= is the datatype of the elements
+of the tensor, i.e., =double=, =complex= ... 
+
+In principle we could say such a struct looks like this
+
+#+begin_src cpp
+template <typename F>
+struct TensorReader {
+  const struct {
+    std::string path;
+    enum { BINARY, TEXT } mode;
+  } in;
+  const struct {
+    Tensor<F> tensor;
+  } out;
+}
+#+end_src
+
+and the function would look like this
+
+#+begin_src cpp
+template <typename F>
+void tensorReader(TensorReader<F> &settings) {
+  // read data from file
+  settings.out.tensor = readTensorFromPath(settings.in.path);
+}
+#+end_src
+
+A specification for the =TensorReader= struct could look in yaml like
+the following
+#+begin_src yaml
+- name: TensorReader<F>
+  const in:
+    path: string
+    mode:
+      enum:
+        - BINARY
+        - TEXT
+  out:
+    tensor: Tensor<F>
+#+end_src
+
+however it is quite unnatural to use =const= modifiers and template
+variables within the =yaml= syntax scope.
+
+An added difficutly is that =yaml= or similar structred languages
+do not support any kind of type checking infrastrcture, where then
+the C++ programmer hast to write code to check for types and define on her
+own pointers, variables in a brittle system.
+
+Common Lisp (CL) in its embedded implementation =ECL= can be of use here.
+Since we can embed fully CL in C++ or C, we can define such a step
+in a yaml-like lisp structure as a spec, let the user write lisp
+structures according to the spec, let CL typecheck the input settings
+and generate simple C++ code to convert these CL structures into
+their corresponding C++ structures.
+
+
+
+
+*** General idea for defining steps
+
+  To set things in perspective, we would like to define a
+  =TensorReader.lisp= file alongside =TensorReader.h= and
+  =TensorReader.cxx=
+  with the specification of this step, it should look something like this
+
+  #+begin_src lisp :eval no :noweb-ref defstep-tensor-reader-example
 (defstep tensor-reader
   :in
   (:name :file
@@ -1531,27 +1601,27 @@ int main () {
    :required t
    :doc "The file where the tensor is located"))
 
-   #+end_src
+  #+end_src
 
-   and every item in the =:in= or =:out= fields
-   is therefore a =step-setting-spec=.
+  and every item in the =:in= or =:out= fields
+  is therefore a =step-setting-spec=.
 
-**** Setting spec
- We would like to define exactly what a setting specification (setting spec)
- is. As we have seen in the example for the tensor-reader, it should be
+*** Setting spec
+We would like to define exactly what a setting specification (setting spec)
+is. As we have seen in the example for the tensor-reader, it should be
 
- #+begin_src lisp :eval no
+#+begin_src lisp :eval no
 (:name :file
  :type (or string null)
  :default nil
  :required t
  :doc "The file where the tensor is located")
- #+end_src
+#+end_src
 
- We define the type =step-setting-spec= to check for the existence of the
- fields and also to check that the =:default= value if of type =:type=.
+We define the type =step-setting-spec= to check for the existence of the
+fields and also to check that the =:default= value if of type =:type=.
 
-   #+begin_src lisp :noweb-ref kimia.types
+  #+begin_src lisp :noweb-ref kimia.types
 (defparameter *setting-spec-default* nil)
 (eval-when (:compile-toplevel)
   (defun step-setting-spec-p (thing)
@@ -1571,15 +1641,15 @@ int main () {
 
 (deftype step-setting-spec ()
   '(satisfies step-setting-spec-p))
-   #+end_src
+  #+end_src
 
-   #+RESULTS:
-   : STEP-SETTING-SPEC
+  #+RESULTS:
+  : STEP-SETTING-SPEC
 
-***** Test
- We can quickly check that this code makes what we think
+**** Test
+We can quickly check that this code makes what we think
 
- #+begin_src lisp :noweb-ref test-kimia.types
+#+begin_src lisp :noweb-ref test-kimia.types
 (let (step)
   (setq step
         '(:name :mode
@@ -1588,30 +1658,30 @@ int main () {
           :required t
           :doc "The file where the tensor is located"))
   (check-type step step-setting-spec))
- #+end_src
+#+end_src
 
- #+RESULTS:
- : NIL
+#+RESULTS:
+: NIL
 
 
-**** Defining steps
+*** Defining steps
 
-  A step spec has the following syntax, as we have already
-  seen
+ A step spec has the following syntax, as we have already
+ seen
 
-  #+begin_src lisp :eval no
+ #+begin_src lisp :eval no
 (defstep
   :name name-of-the-step
   :in setting-spec*
   :out setting-spec*)
-  #+end_src
+ #+end_src
 
- For ease of writing these definitions we do not wish
- to have proper lists as the value of the =:in= keyword,
- so we need a function parsing exactly the =:in= part
- and the =:out= part from a list
+For ease of writing these definitions we do not wish
+to have proper lists as the value of the =:in= keyword,
+so we need a function parsing exactly the =:in= part
+and the =:out= part from a list
 
-  #+begin_src lisp :noweb-ref kimia.types
+ #+begin_src lisp :noweb-ref kimia.types
 (eval-when (:compile-toplevel :load-toplevel)
   (defun consume-in-out (lst &optional (tail '()))
     (let ((first (car lst))
@@ -1624,14 +1694,14 @@ int main () {
 
 
 
- #+end_src
+#+end_src
 
- #+RESULTS:
- : GET-KEYS
+#+RESULTS:
+: GET-KEYS
 
- We still need the definition of a step.
+We still need the definition of a step.
 
- #+begin_src lisp :noweb-ref kimia.types
+#+begin_src lisp :noweb-ref kimia.types
 (defun step-setting-typep (setting-pair setting-spec-list)
   (let* ((key (car setting-pair))
          (value (getf setting-pair key))
@@ -1717,26 +1787,26 @@ int main () {
        (push ',type-name *KIMIA-TYPES*)
        (deftype ,type-name ()
          '(satisfies ,type-predicate-name)))))
-  #+end_src
+ #+end_src
 
-  #+RESULTS:
-  : DEFSTEP
+ #+RESULTS:
+ : DEFSTEP
 
-  For instance we can use this macro in the followig manner
+ For instance we can use this macro in the followig manner
 
-  #+begin_src lisp :noweb yes :noweb-ref test-kimia.types :eval no
+ #+begin_src lisp :noweb yes :noweb-ref test-kimia.types :eval no
 <<defstep-tensor-reader-example>>
 
 (check-type (tensor-reader-default)
             tensor-reader)
-  #+end_src
+ #+end_src
 
-  #+RESULTS:
-  : NIL
+ #+RESULTS:
+ : NIL
 
-  and we can make sure that it woks for example as
+ and we can make sure that it woks for example as
 
-  #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
+ #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
 (let (step default)
   (setq step
         '(:name Tensor-Reader
@@ -1748,32 +1818,32 @@ int main () {
 
   (check-type default tensor-reader)
   (check-type step tensor-reader))
-  #+end_src
+ #+end_src
 
- A very simple macro to check the type of a step is defined below
+A very simple macro to check the type of a step is defined below
 
-  #+begin_src lisp :results none :noweb-ref kimia.types
+ #+begin_src lisp :results none :noweb-ref kimia.types
 (defmacro check-step-type (step)
   (let ((name (getf step :name)))
     `(let ((step ',step))
        (check-type step ,name))))
- #+end_src
+#+end_src
 
- which we can use like
- #+begin_src lisp :noweb-ref test-kimia.types :eval no
+which we can use like
+#+begin_src lisp :noweb-ref test-kimia.types :eval no
 (let ((step (tensor-reader-default)))
   (eval `(check-step-type ,step)))
- #+end_src
+#+end_src
 
- #+RESULTS:
- : NIL
+#+RESULTS:
+: NIL
 
-**** Making steps
+*** Making steps
 
- And we just need to create a function to easier create
- steps
+And we just need to create a function to easier create
+steps
 
- #+begin_src lisp :results none :noweb-ref kimia.types
+#+begin_src lisp :results none :noweb-ref kimia.types
 (defmacro mk-stepq (name &rest args)
   (check-type name symbol)
   (let* ((in-out (consume-in-out args))
@@ -1801,11 +1871,11 @@ int main () {
                  :out ,out))
     (eval `(check-step-type ,step))
     step))
-  #+end_src
+ #+end_src
 
-  and we can create a step in the following manner
+ and we can create a step in the following manner
 
-  #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
+ #+begin_src lisp :results none :noweb-ref test-kimia.types :eval no
 (mk-step
  'Tensor-Reader
  :in
@@ -1821,7 +1891,7 @@ int main () {
  :mode :binary
  :out
  :tensor "Whatever")
-  #+end_src
+ #+end_src
 ** Testing
 Let us define a poor man's test unit framework
 #+begin_src lisp :tangle src/clkimia/test-data.lisp :eval no :noweb no-export
