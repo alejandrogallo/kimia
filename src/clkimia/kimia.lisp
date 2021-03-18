@@ -285,6 +285,8 @@
 (defequiv :c++ string
   :translate "std::string"
   :caster-body
+  (lambda (ty)
+    (format nil
   "~
 const size_t dimension(o->base_string.dim);
 std::string result;
@@ -294,7 +296,7 @@ ecl_base_char* c = o->base_string.self;
 // that is why the i * 4 is there
 for (size_t i = 0; i < dimension; i++)
   result += *(c + i * 4);
-return (size_t)new std::string(result);"
+return (size_t)new std::string(result);"))
   :caster-name "clstr")
 (defparameter +c++-vector-body+
 "~

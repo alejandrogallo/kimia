@@ -594,8 +594,10 @@ and with this the equivalence for the CL =string= type is
 (defequiv :c++ string
   :translate "std::string"
   :caster-body
+  (lambda (ty)
+    (format nil
   "~
-<<string-caster-body>>"
+<<string-caster-body>>"))
   :caster-name "clstr")
 #+end_src
 
