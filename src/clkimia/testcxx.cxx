@@ -81,14 +81,54 @@ int main (int argc, char **argv) {
             assert(r[1][1] == 5);)
 
   TEST_CASE("TensorReaderDouble (not templated)",
-            cl_object reader_lisp = LISP((:name "hello world"
-                                          :lens #(5 9 8 9.6d0)));
-            auto r(*(TensorReaderDouble*)s_tensor_reader_double(reader_lisp));
+            auto o = LISP((:name "hello world"
+                           :lens #(5 9 8 9.6d0)));
+            auto r(*(TensorReaderDouble*)s_tensor_reader_double(o));
             assert(r.name == "hello world");
             assert(r.lens[0] == double(5));
             assert(r.lens[1] == double(9));
             assert(r.lens[2] == double(8));
             assert(r.lens[3] == double(9.6));)
+
+  TEST_CASE("Monster struct <int double int>",
+            auto o = LISP((:name "Monster Struct with int double int"
+                           :data #(4568 987981 1657)
+                           :connection (:ip (:ipv4 12300065
+                                             :ipv6 456)
+                                        :timeout 456.5)
+                           :components (:pphh #(1 2 3)
+                                        :pppp #(4 5 6)
+                                        :hhhh #(7 8 9)
+                                        :lens #(3 3 3))
+                           :in (:date 121212)
+                           :lens #(5.5 6.5)));
+            auto r = *(MonsterStruct<int, double, int>*)
+                      s_monster_struct_with_clint_and_cldouble_and_clint(o);
+            assert(r.name == "Monster Struct with int double int");
+            assert(r.connection.ip.ipv6 == 456);
+            assert(r.connection.ip.ipv4 == 12300065);
+            assert(r.connection.timeout == 456.5);
+            assert(r.components.pphh.size() == 3);
+              assert(r.components.pphh[0] == 1);
+              assert(r.components.pphh[1] == 1+1);
+              assert(r.components.pphh[2] == 1+2);
+            assert(r.components.pppp.size() == 3);
+              assert(r.components.pppp[0] == 4);
+              assert(r.components.pppp[1] == 4+1);
+              assert(r.components.pppp[2] == 4+2);
+            assert(r.components.hhhh.size() == 3);
+              assert(r.components.hhhh[0] == 7);
+              assert(r.components.hhhh[1] == 8);
+              assert(r.components.hhhh[2] == 9);
+            assert(r.components.lens.size() == 3);
+              assert(r.components.lens[0] == 3);
+              assert(r.components.lens[1] == 3);
+              assert(r.components.lens[2] == 3);
+            assert(*r.in.date == 121212);
+            assert(r.lens.size() == 2);
+            assert(r.lens[0] == 5.5);
+            assert(r.lens[1] == 6.5);
+            )
 
   return 0;
 }
