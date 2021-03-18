@@ -13,6 +13,7 @@
         (Uttu string)
         (Uttu (vec string))
         ;(Uttu (struct (Uttu string)))
+        ;(Uttu (struct (struct tenso-reader-double)))
         (davidson-solver integer double-float double-float integer)
         (monster-struct integer double-float integer)
         ))

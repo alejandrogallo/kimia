@@ -217,13 +217,26 @@
 
   :caster-name "clstr")
 (defparameter +c++-vector-body+
-"~a result(ecl_to_int(cl_length(o)));
-"for (size_t i=0; i < result.size(); i++) {
-"  cl_object index(c_string_to_object(std::to_string(i).c_str()));
-"  ~a *element = (~a*)~a(cl_aref(2, o, index));
-"  result[i] = *element;
-"}
-"return (size_t)new ~a(result);")
+"~
+~a result~a;
+for (size_t i=0; i < result.size(); i++) {
+  cl_object index(c_string_to_object(std::to_string(i).c_str()));
+  ~a *element = (~a*)~a(cl_aref(2, o, index));
+  result[i] = *element;
+}
+return (size_t)new ~a(result);")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun vector-body-c++ (ty &key (array nil))
+    (format nil
+            +c++-vector-body+
+            (translate :c++ ty)
+            (if array "" "(ecl_to_int(cl_length(o)))")
+            (translate :c++ (cadr ty))
+            (translate :c++ (cadr ty))
+            (caster-name :c++ (cadr ty))
+            (translate :c++ ty))))
+
 
 (defun vec-p (F v)
   (every (lambda (x) (typep x F))
@@ -246,16 +259,7 @@
 
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
 
-  :caster-body
-     (lambda (ty)
-       (format nil
-               +c++-vector-body+
-               (translate :c++ ty)
-               (translate :c++ (cadr ty))
-               (translate :c++ (cadr ty))
-               (caster-name :c++ (cadr ty))
-               (translate :c++ ty)
-               )))
+  :caster-body #'vector-body-c++)
 
 (defequiv :c++ (vec F N)
 
@@ -271,15 +275,8 @@
                          (caddr ty)
                          (caster-name :c++ (cadr ty))))
   :caster-body
-     (lambda (ty)
-       (format nil
-               +c++-vector-body+
-               (translate :c++ ty)
-               (translate :c++ (cadr ty))
-               (translate :c++ (cadr ty))
-               (caster-name :c++ (cadr ty))
-               (translate :c++ ty)
-               )))
+  (lambda (ty)
+    (vector-body-c++ ty :array t)))
 
 
 ;; generic variables

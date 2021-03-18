@@ -109,10 +109,10 @@
 (assert-equal (caster-snippet :c++ '(vec integer))
 "size_t clint (const cl_object o);
 size_t v_of_clint (const cl_object o){
-  
   std::vector< int > result(ecl_to_int(cl_length(o)));
   for (size_t i=0; i < result.size(); i++) {
-    int *element = (int*)clint(cl_aref(2, o, i));
+    cl_object index(c_string_to_object(std::to_string(i).c_str()));
+    int *element = (int*)clint(cl_aref(2, o, index));
     result[i] = *element;
   }
   return (size_t)new std::vector< int >(result);
@@ -123,10 +123,10 @@ size_t v_of_clint (const cl_object o){
 
 (assert-equal (caster-snippet :c++ '(vec (vec double-float) 8))
 "size_t ar_of_8_v_of_cldouble (const cl_object o){
-  
-  std::array< std::vector< double >, 8 > result(ecl_to_int(cl_length(o)));
+  std::array< std::vector< double >, 8 > result;
   for (size_t i=0; i < result.size(); i++) {
-    std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, i));
+    cl_object index(c_string_to_object(std::to_string(i).c_str()));
+    std::vector< double > *element = (std::vector< double >*)v_of_cldouble(cl_aref(2, o, index));
     result[i] = *element;
   }
   return (size_t)new std::array< std::vector< double >, 8 >(result);

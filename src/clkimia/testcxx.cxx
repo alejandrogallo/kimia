@@ -10,6 +10,8 @@
 #include "test.h"
 
 #define LISP(...) lisp::fromStr(#__VA_ARGS__)
+#define TEST_CASE(NAME, ...) { std::cout << "[TEST]: " << NAME << std::endl; \
+                               __VA_ARGS__ }
 
 extern "C" void init_clkimia(cl_object);
 extern "C" void init_clkimiat(cl_object);
@@ -41,45 +43,52 @@ namespace lisp {
 
 
 int main (int argc, char **argv) {
-  //cl_object output;
-
   lisp::initialize(argc, argv);
 
-  //output = cl_safe_eval(c_string_to_object(":penis"), Cnil, Cnil);
-  //lisp::eval("(in-package :kimia)");
-  //lisp::eval("(kimia::wrap-input-script (assert-eq 'a 'a))");
-  //lisp::eval("(princ (translate :c++ '(struct tensor-reader-double)))");
-  std::cout << "what is happending" << std::endl;
+  TEST_CASE("(vec integer): Vector of integers",
+            auto o = LISP( #(1 5 4) );
+            auto r = *(std::vector<int>*)v_of_clint(o);
+            assert(r.size() == 3);
+            assert(r[0] == 1);
+            assert(r[1] == 5);
+            assert(r[2] == 4);)
 
-  cl_print(1, lisp::eval("#(1 5 6)"));
-  cl_print(1, lisp::eval("(type-of #(1 5 6))"));
-  cl_print(1, lisp::eval("(length #(1 5 6))"));
-  cl_print(1, lisp::eval("(aref #(1 5 6) 0)"));
-  cl_object o(lisp::eval("#(42 43 44)"));
+  TEST_CASE("(vec double-float): Vector of doubles",
+            auto o = LISP( #(1.5d0 5.8d0 4.0d0) );
+            auto r = *(std::vector<double>*)v_of_cldouble(o);
+            assert(r.size() == 3);
+            assert(r[0] == 1.5);
+            assert(r[1] == 5.8);
+            assert(r[2] == 4.0);)
 
-  auto a(*(std::vector<int>*)v_of_clint(lisp::fromStr("#(59 48 987)")));
-  auto b(*(std::vector<double>*)v_of_cldouble(lisp::fromStr("#(59.5d0 48.5d0 987.5d0)")));
-  //auto pa(*(std::vector<int>**)pv_of_clint(lisp::fromStr("#(59 48 987)")));
+  TEST_CASE("(vec single-float): Vector of float",
+            auto o = LISP( #(1.5 5.8 4.0) );
+            auto r = *(std::vector<float>*)v_of_clfloat(o);
+            assert(r.size() == 3);
+            assert(r[0] == float(1.5));
+            assert(r[1] == float(5.8));
+            assert(r[2] == float(4.0));)
 
-  for (auto i: a) std::cout << i << std::endl;
-  for (auto i: b) std::cout << i << std::endl;
-  //for (auto i: *pa) std::cout << i << std::endl;
+  TEST_CASE("(vec (vec integer)): Vector of vector of ints",
+            auto o = LISP( #(#(1 2) #(4 5)) );
+            auto r = *(std::vector<std::vector<int>>*)v_of_v_of_clint(o);
+            assert(r.size() == 2);
+            assert(r[0].size() == 2);
+            assert(r[1].size() == 2);
+            assert(r[0][0] == 1);
+            assert(r[0][1] == 2);
+            assert(r[1][0] == 4);
+            assert(r[1][1] == 5);)
 
-
-  cl_object reader_lisp
-    = LISP( (:name "hello world my name is alejandro"
-             :lens #(5 9 8 9.6))
-           );
-
-  auto reader(*(TensorReaderDouble*)s_tensor_reader_double(reader_lisp));
-  std::cout << reader.name << std::endl;
-  for (auto i: reader.lens) {
-    std::cout << i + 10.1 << std::endl;
-  }
-
-
-
-
+  TEST_CASE("TensorReaderDouble (not templated)",
+            cl_object reader_lisp = LISP((:name "hello world"
+                                          :lens #(5 9 8 9.6d0)));
+            auto r(*(TensorReaderDouble*)s_tensor_reader_double(reader_lisp));
+            assert(r.name == "hello world");
+            assert(r.lens[0] == double(5));
+            assert(r.lens[1] == double(9));
+            assert(r.lens[2] == double(8));
+            assert(r.lens[3] == double(9.6));)
 
   return 0;
 }
