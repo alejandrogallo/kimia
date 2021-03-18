@@ -41,6 +41,40 @@
        (format t "~2%~s~%~Tis not eq to ~%~T~s~2%"
                ',one ',two)
        (assert nil))))
+(assert-equal (words "hello world")
+              '("hello" "world"))
+(assert-equal (words "hello  world")
+              '("hello" "" "world"))
+(assert-equal (words "tensor.lens.pphh" :sep #\.)
+              '("tensor" "lens" "pphh"))
+(assert-equal (unwords '("tensor" "lens" "pphh") :sep #\.)
+              "tensor.lens.pphh")
+(assert-equal (unlines '("tensor" "lens" "pphh"))
+              (format nil "tensor~%lens~%pphh"))
+(assert-equal (lines (format nil "tensor~%lens~%pphh"))
+              '("tensor" "lens" "pphh"))
+
+;; plist-keys
+(assert-equal (plist-keys '(:asdf 5 :err 98))
+              '(:asdf :err))
+(assert-equal (plist-keys '(:asdf 5 :err))
+              '(:asdf))
+
+;; ulist-to-plist
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word
+                                :out this and that and well
+                                :fun 5 6)
+                              '(:in :out :fun))
+              '(:in (654 9 8 :key :word)
+                :out (this and that and well)
+                :fun (5 6)))
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word
+                                :out this and that and well
+                                :fun 5 6)
+                              '(:missing))
+              '(:missing nil))
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word) '())
+              '())
 (assert (string= (c++-type-name 'tensor-reader) "TensorReader"))
 (assert (string= (c++-type-name "TeNsor-ReAder") "TensorReader"))
 (assert (string= (c-type-name "TeNsor-ReAder") "tensor_reader_t"))
@@ -237,11 +271,6 @@ size_t cldouble (const cl_object o){
 (assert-not (struct-spec-generic-p
              '(struct (davidson-solver integer string integer integer))))
 
-;; plist-keys
-(assert-equal (plist-keys '(:asdf 5 :err 98))
-              '(:asdf :err))
-(assert-equal (plist-keys '(:asdf 5 :err))
-              '(:asdf))
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
 

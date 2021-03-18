@@ -202,20 +202,20 @@
   :translate "bool"
   :caster-name (lambda (ty) (format nil "cl~a" (translate :c++ ty)))
   :caster-body "return (size_t)new bool(ecl_to_bool(o));")
-
 ;; TODO: caster body
 (defequiv :c++ string
   :translate "std::string"
-  :caster-body "const size_t dimension(o->base_string.dim);
-                std::string result;
-                ecl_base_char* c = o->base_string.self;
-                // TODO: handle the unicode well.
-                // right now I know it is 32bit characters,
-                // that is why the i * 4 is there
-                for (size_t i = 0; i < dimension; i++)
-                  result += *(c + i * 4);
-                return (size_t)new std::string(result);"
-
+  :caster-body
+  "~
+const size_t dimension(o->base_string.dim);
+std::string result;
+ecl_base_char* c = o->base_string.self;
+// TODO: handle the unicode well.
+// right now I know it is 32bit characters,
+// that is why the i * 4 is there
+for (size_t i = 0; i < dimension; i++)
+  result += *(c + i * 4);
+return (size_t)new std::string(result);"
   :caster-name "clstr")
 (defparameter +c++-vector-body+
 "~

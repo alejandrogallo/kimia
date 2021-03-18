@@ -91,6 +91,29 @@ order.
         (otherwise (plist-keys (cdr tail)
                              (cons head rest))))))
 
+  (defun ulist-to-plist (lst keys
+                         &key
+                           (current-key nil)
+                           (result nil)
+                           (tail nil))
+    (let ((first (car lst))
+          (rest (cdr lst)))
+      (cond
+        ((member first keys) (ulist-to-plist rest keys
+                                             :current-key first
+                                             :result result))
+        ((null lst) (let (ret)
+                        (dolist (key (reverse keys))
+                          (setf (getf ret key) (reverse (getf result key))))
+                        ret))
+        ((member current-key keys)
+         (ulist-to-plist rest keys
+                         :current-key current-key
+                         :result (prog2 (push first (getf result current-key))
+                                     result)))
+        (t (ulist-to-plist rest keys
+                           :current-key current-key
+                           :result result)))))
 
   (defun consume-in-out (lst &optional (tail '()))
     (let ((first (car lst))
@@ -102,8 +125,44 @@ order.
         (t (consume-in-out rest (cons first tail)))))))
 #+end_src
 
-#+RESULTS:
-: NIL
+*** Tests
+
+#+begin_src lisp :eval no :noweb-ref test-kimia
+(assert-equal (words "hello world")
+              '("hello" "world"))
+(assert-equal (words "hello  world")
+              '("hello" "" "world"))
+(assert-equal (words "tensor.lens.pphh" :sep #\.)
+              '("tensor" "lens" "pphh"))
+(assert-equal (unwords '("tensor" "lens" "pphh") :sep #\.)
+              "tensor.lens.pphh")
+(assert-equal (unlines '("tensor" "lens" "pphh"))
+              (format nil "tensor~%lens~%pphh"))
+(assert-equal (lines (format nil "tensor~%lens~%pphh"))
+              '("tensor" "lens" "pphh"))
+
+;; plist-keys
+(assert-equal (plist-keys '(:asdf 5 :err 98))
+              '(:asdf :err))
+(assert-equal (plist-keys '(:asdf 5 :err))
+              '(:asdf))
+
+;; ulist-to-plist
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word
+                                :out this and that and well
+                                :fun 5 6)
+                              '(:in :out :fun))
+              '(:in (654 9 8 :key :word)
+                :out (this and that and well)
+                :fun (5 6)))
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word
+                                :out this and that and well
+                                :fun 5 6)
+                              '(:missing))
+              '(:missing nil))
+(assert-equal (ulist-to-plist '(:in 654 9 8 :key :word) '())
+              '())
+#+end_src
 
  
 ** Host code generation
@@ -1205,11 +1264,6 @@ generic data types:
 (assert-not (struct-spec-generic-p
              '(struct (davidson-solver integer string integer integer))))
 
-;; plist-keys
-(assert-equal (plist-keys '(:asdf 5 :err 98))
-              '(:asdf :err))
-(assert-equal (plist-keys '(:asdf 5 :err))
-              '(:asdf))
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
 
@@ -1944,7 +1998,7 @@ and the main testing package is therefore
  #+end_src
 
  #+RESULTS:
- : COMMON-LISP-USER::WRAP-INPUT-SCRIPT
+ : WRAP-INPUT-SCRIPT
 
 ** Limitations
 - Cannot create `(vec (const A))` like `std::vector<const int>` etc.
