@@ -3,6 +3,7 @@
   (:nicknames :k))
 (in-package :kimia)
 
+
 (defun endl () (format nil "~%"))
 
 (defun c++-type-name (thing)
@@ -92,7 +93,7 @@
                                         ,thing))))))
     (let* ((new-spec-name (defequiv-var-name lang type))
            (spec (copy-seq (defequiv-spec lang from)))
-           (keys (get-keys args)))
+           (keys (plist-keys args)))
       (dolist (key keys)
         (unless (null (getf args key))
           (setf (getf spec key) (fun-or-scalar (getf args key)))))
@@ -462,17 +463,6 @@ return (size_t)new ~a(result);")
   (defun define-struct-c++ (ty)
     (translate-struct-c++ ty))
 
-  (defun get-keys (lst &optional (rest '()))
-    "This function just gets every other element
-  "
-    (check-type lst (or cons null))
-    (let ((head (car lst))
-          (tail (cdr lst)))
-      (case tail
-        ((nil) (reverse rest))
-        (otherwise (get-keys (cdr tail)
-                             (cons head rest))))))
-
   (defun struct-check-type (ty cons-struct)
     (check-type cons-struct cons)
     (check-type ty (or struct-spec struct-identifier))
@@ -482,7 +472,7 @@ return (size_t)new ~a(result);")
               (mapcar (lambda (key) (let ((type (assoc key fields)))
                                       (typep (getf cons-struct key)
                                              (getf type key))))
-                      (get-keys cons-struct)))))
+                      (plist-keys cons-struct)))))
 
   (defun struct-caster-name (ty)
     (let* ((name (struct-spec-name ty))
@@ -668,18 +658,6 @@ return (size_t)new ~a(result);")
 ;;
 ;;(deftype step-setting-spec ()
 ;;  '(satisfies step-setting-spec-p))
-;;(eval-when (:compile-toplevel :load-toplevel)
-;;  (defun consume-in-out (lst &optional (tail '()))
-;;    (let ((first (car lst))
-;;          (rest (cdr lst)))
-;;      (cond
-;;        ((eq first :out) `(,(reverse tail) ,rest))
-;;        ((eq first :in) (consume-in-out rest tail))
-;;        ((eq lst '()) `(,(reverse tail) ,rest))
-;;        (t (consume-in-out rest (cons first tail)))))))
-;;
-;;
-;;
 ;;(defun step-setting-typep (setting-pair setting-spec-list)
 ;;  (let* ((key (car setting-pair))
 ;;         (value (getf setting-pair key))
@@ -744,9 +722,9 @@ return (size_t)new ~a(result);")
 ;;         (check-type thing cons)
 ;;         (let* ((-name (getf thing :name))
 ;;                (-in (getf thing :in))
-;;                (-in-keys (get-keys -in))
+;;                (-in-keys (plist-keys -in))
 ;;                (-out (getf thing :out))
-;;                (-out-keys (get-keys -out))
+;;                (-out-keys (plist-keys -out))
 ;;                (spec (,spec-fun-name))
 ;;                (spec-name (getf spec :name))
 ;;                (spec-in (getf spec :in))
@@ -810,38 +788,3 @@ return (size_t)new ~a(result);")
 
 ;(defmacro >> (&rest args)
 ;  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
-(defun lines (str
-              &optional (current-line '()) (rest '())
-              &key (sep #\newline))
-  (let* ((lst (coerce str 'list))
-          (rest-str (coerce (cdr lst) 'string))
-          (current-char (car lst)))
-    (cond
-      ((eq current-char sep)
-        (lines rest-str
-              '()
-              (cons (coerce (reverse current-line) 'string) rest)
-              :sep sep))
-      ((null current-char)
-        (reverse (cons (coerce (reverse current-line) 'string) rest)))
-      (t (lines rest-str
-                (cons current-char current-line)
-                rest
-                :sep sep)))))
-
-(defun unlines (lst-str &key (sep "~%"))
-  (format nil (format nil "~a~a~a" "~{~a~^" sep "~}") lst-str))
-
-(defun words (str &key (sep #\space))
-  (lines str nil nil :sep sep))
-
-(defun unwords (str &key (sep #\space))
-  (unlines str :sep sep))
-
-(defun indent (n str &key (sep #\space))
-  (format nil
-          (format nil
-                  "~~{~a~~a~a~~}"
-                  (coerce (make-array n :initial-element sep) 'string)
-                  "~%")
-          (lines str)))

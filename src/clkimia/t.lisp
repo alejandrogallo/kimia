@@ -237,10 +237,10 @@ size_t cldouble (const cl_object o){
 (assert-not (struct-spec-generic-p
              '(struct (davidson-solver integer string integer integer))))
 
-;; get-keys
-(assert-equal (get-keys '(:asdf 5 :err 98))
+;; plist-keys
+(assert-equal (plist-keys '(:asdf 5 :err 98))
               '(:asdf :err))
-(assert-equal (get-keys '(:asdf 5 :err))
+(assert-equal (plist-keys '(:asdf 5 :err))
               '(:asdf))
 
 (struct-get-expanded-spec '(struct tensor-reader-double))
@@ -366,8 +366,8 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
 ;;           :required t
 ;;           :doc "The file where the tensor is located"))
 ;;   (check-type step step-setting-spec))
-;; (defstep tensor-reader
-;;   :in
+;; (defstep (tensor-reader F)
+;; :in
 ;;   (:name :file
 ;;    :type string
 ;;    :default "input.dat"
@@ -378,13 +378,12 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
 ;;    :default :binary
 ;;    :required t
 ;;    :doc "The encoding and format that the tensor is written in")
-;;   :out
+;; :out
 ;;   (:name :tensor
-;;    :type string
-;;    :default "out.tensor"
-;;    :required t
-;;    :doc "The file where the tensor is located"))
-;; 
+;;    :type (tensor F)
+;;    :doc "The file where the tensor is located")
+;; :run
+;;   ("runTensorReader" F))
 ;; 
 ;; (check-type (tensor-reader-default)
 ;;             tensor-reader)
