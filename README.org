@@ -42,7 +42,7 @@ order.
 #+end_src
 
 ** Utils
-#+begin_src lisp :noweb-ref kimia-utils
+#+begin_src lisp :noweb-ref kimia.utils
 (defun lines (str
               &optional (current-line '()) (rest '())
               &key (sep #\newline))
@@ -79,7 +79,7 @@ order.
                   "~%")
           (lines str)))
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
   (defun plist-keys (lst &optional (rest '()))
     "This function just gets every other element"
@@ -848,7 +848,7 @@ Also pointers and const qualifiers have to be implemented.
 ;; the casters should be the same really
 (assert-equal (caster-snippet :c++ '(const double-float))
 "size_t cldouble (const cl_object o);
-size_t cldouble (const cl_object o){
+size_t ccldouble (const cl_object o){
   return (size_t)new double(ecl_to_double(o));
 }")
 #+end_src
@@ -1691,45 +1691,49 @@ is. As we have seen in the example for the tensor-reader, it should be
 #+end_src
 
 We define the type =step-setting-spec= to check for the existence of the
-fields and also to check that the =:default= value if of type =:type=.
+fields and also to check that the =:default= value if of type =:type=
+if they are given.
 
-  #+begin_src lisp :noweb-ref kimia.types
-(defparameter *setting-spec-default* nil)
-(eval-when (:compile-toplevel)
-  (defun step-setting-spec-p (thing)
-    (let ((ty (getf thing :type))
-          (default (getf thing :default))
-          (doc (getf thing :doc))
-          (name (getf thing :name)))
-      (check-type name keyword)
-      (check-type doc string)
-      (setq *setting-spec-default* default)
-      ;; TODO: do this without setq
-      (eval `(check-type *setting-spec-default* ,ty))
-      (and name
-           ty
-           (member :default thing)
-           (member :required thing)))))
+The only fields that have to be supplied are =:name=, =:type= and =:doc=,
+yes, =:doc=.
+
+  #+begin_src lisp :noweb-ref kimia.step :results none
+(defun step-setting-spec-p (thing)
+  (let ((ty (getf thing :type))
+        (default (getf thing :default))
+        (doc (getf thing :doc))
+        (name (getf thing :name)))
+    (unless (typep name 'keyword)
+      (error "The name of the spec setting should be a keyword"))
+    (when default
+      (unless (typep default ty)
+        (error (format nil "Default value ~s should be of type ~s"
+                       default ty))))
+    (check-type doc string)
+    (assert (not (string-equal doc ""))) ;; it only takes 5 seconds
+    (and name
+         ty
+         (member :doc thing))))
 
 (deftype step-setting-spec ()
-  '(satisfies step-setting-spec-p))
+  '(and cons
+    (satisfies step-setting-spec-p)))
   #+end_src
-
-  #+RESULTS:
-  : STEP-SETTING-SPEC
 
 **** Test
 We can quickly check that this code makes what we think
 
-#+begin_src lisp :noweb-ref test-kimia.types
-(let (step)
-  (setq step
-        '(:name :mode
-          :type (member :binary :text)
-          :default :binary
-          :required t
-          :doc "The file where the tensor is located"))
-  (check-type step step-setting-spec))
+#+begin_src lisp :noweb-ref test-kimia.step
+(assert (typep '(:name :mode
+                 :type (member :binary :text)
+                 :default :binary
+                 :required t
+                 :doc "The file where the tensor is located")
+               'step-setting-spec))
+(assert (typep '(:name :mode
+                 :type (member :binary :text)
+                 :doc "todo")
+               'step-setting-spec))
 #+end_src
 
 #+RESULTS:
@@ -1979,6 +1983,7 @@ and the main testing package is therefore
 
 <<test-framework>>
 <<test-kimia>>
+<<test-kimia.step>>
 ;; <<test-kimia.types>>
 
 #+end_src
@@ -1992,6 +1997,7 @@ and the main testing package is therefore
 
 <<kimia.utils>>
 <<kimia.codegen>>
+<<kimia.step>>
 ;;<<kimia.types>>
 <<kimia>>
 

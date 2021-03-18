@@ -3,7 +3,86 @@
   (:nicknames :k))
 (in-package :kimia)
 
+(defun lines (str
+              &optional (current-line '()) (rest '())
+              &key (sep #\newline))
+  (let* ((lst (coerce str 'list))
+          (rest-str (coerce (cdr lst) 'string))
+          (current-char (car lst)))
+    (cond
+      ((eq current-char sep)
+        (lines rest-str
+              '()
+              (cons (coerce (reverse current-line) 'string) rest)
+              :sep sep))
+      ((null current-char)
+        (reverse (cons (coerce (reverse current-line) 'string) rest)))
+      (t (lines rest-str
+                (cons current-char current-line)
+                rest
+                :sep sep)))))
 
+(defun unlines (lst-str &key (sep "~%"))
+  (format nil (format nil "~a~a~a" "~{~a~^" sep "~}") lst-str))
+
+(defun words (str &key (sep #\space))
+  (lines str nil nil :sep sep))
+
+(defun unwords (str &key (sep #\space))
+  (unlines str :sep sep))
+
+(defun indent (n str &key (sep #\space))
+  (format nil
+          (format nil
+                  "~~{~a~~a~a~~}"
+                  (coerce (make-array n :initial-element sep) 'string)
+                  "~%")
+          (lines str)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
+  (defun plist-keys (lst &optional (rest '()))
+    "This function just gets every other element"
+    (check-type lst (or cons null))
+    (let ((head (car lst))
+          (tail (cdr lst)))
+      (case tail
+        ((nil) (reverse rest))
+        (otherwise (plist-keys (cdr tail)
+                             (cons head rest))))))
+
+  (defun ulist-to-plist (lst keys
+                         &key
+                           (current-key nil)
+                           (result nil)
+                           (tail nil))
+    (let ((first (car lst))
+          (rest (cdr lst)))
+      (cond
+        ((member first keys) (ulist-to-plist rest keys
+                                             :current-key first
+                                             :result result))
+        ((null lst) (let (ret)
+                        (dolist (key (reverse keys))
+                          (setf (getf ret key) (reverse (getf result key))))
+                        ret))
+        ((member current-key keys)
+         (ulist-to-plist rest keys
+                         :current-key current-key
+                         :result (prog2 (push first (getf result current-key))
+                                     result)))
+        (t (ulist-to-plist rest keys
+                           :current-key current-key
+                           :result result)))))
+
+  (defun consume-in-out (lst &optional (tail '()))
+    (let ((first (car lst))
+          (rest (cdr lst)))
+      (cond
+        ((eq first :out) `(,(reverse tail) ,rest))
+        ((eq first :in) (consume-in-out rest tail))
+        ((eq lst '()) `(,(reverse tail) ,rest))
+        (t (consume-in-out rest (cons first tail)))))))
 (defun endl () (format nil "~%"))
 
 (defun c++-type-name (thing)
@@ -639,25 +718,26 @@ return (size_t)new ~a(result);")
             (define-enum-c++ `(enum nil ,@(cdr ty)))))
 (defun struct-get-fields (s)
   (car s))
-;;(defparameter *setting-spec-default* nil)
-;;(eval-when (:compile-toplevel)
-;;  (defun step-setting-spec-p (thing)
-;;    (let ((ty (getf thing :type))
-;;          (default (getf thing :default))
-;;          (doc (getf thing :doc))
-;;          (name (getf thing :name)))
-;;      (check-type name keyword)
-;;      (check-type doc string)
-;;      (setq *setting-spec-default* default)
-;;      ;; TODO: do this without setq
-;;      (eval `(check-type *setting-spec-default* ,ty))
-;;      (and name
-;;           ty
-;;           (member :default thing)
-;;           (member :required thing)))))
-;;
-;;(deftype step-setting-spec ()
-;;  '(satisfies step-setting-spec-p))
+(defun step-setting-spec-p (thing)
+  (let ((ty (getf thing :type))
+        (default (getf thing :default))
+        (doc (getf thing :doc))
+        (name (getf thing :name)))
+    (unless (typep name 'keyword)
+      (error "The name of the spec setting should be a keyword"))
+    (when default
+      (unless (typep default ty)
+        (error (format nil "Default value ~s should be of type ~s"
+                       default ty))))
+    (check-type doc string)
+    (assert (not (string-equal doc ""))) ;; it only takes 5 seconds
+    (and name
+         ty
+         (member :doc thing))))
+
+(deftype step-setting-spec ()
+  '(and cons
+    (satisfies step-setting-spec-p)))
 ;;(defun step-setting-typep (setting-pair setting-spec-list)
 ;;  (let* ((key (car setting-pair))
 ;;         (value (getf setting-pair key))

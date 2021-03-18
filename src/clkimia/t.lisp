@@ -208,7 +208,7 @@ size_t v_of_clint (const cl_object o){
 ;; the casters should be the same really
 (assert-equal (caster-snippet :c++ '(const double-float))
 "size_t cldouble (const cl_object o);
-size_t cldouble (const cl_object o){
+size_t ccldouble (const cl_object o){
   return (size_t)new double(ecl_to_double(o));
 }")
 (assert tensor-reader-double-spec)
@@ -387,14 +387,16 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
     *(std::vector< double >*)v_of_cldouble(cl_getf(2, o, c_string_to_object(\":LENS\")))
   };
 }")
-;; (let (step)
-;;   (setq step
-;;         '(:name :mode
-;;           :type (member :binary :text)
-;;           :default :binary
-;;           :required t
-;;           :doc "The file where the tensor is located"))
-;;   (check-type step step-setting-spec))
+(assert (typep '(:name :mode
+                 :type (member :binary :text)
+                 :default :binary
+                 :required t
+                 :doc "The file where the tensor is located")
+               'step-setting-spec))
+(assert (typep '(:name :mode
+                 :type (member :binary :text)
+                 :doc "todo")
+               'step-setting-spec))
 ;; (defstep (tensor-reader F)
 ;; :in
 ;;   (:name :file
