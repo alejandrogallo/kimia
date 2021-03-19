@@ -288,14 +288,16 @@
   (lambda (ty)
     (format nil
   "~
-const size_t dimension(o->base_string.dim);
+const size_t dimension(o->base_string.dim)
+           , charSize = ECL_EXTENDED_STRING_P(o) ? 4 : 1
+           ;
 std::string result;
 ecl_base_char* c = o->base_string.self;
 // TODO: handle the unicode well.
 // right now I know it is 32bit characters,
 // that is why the i * 4 is there
 for (size_t i = 0; i < dimension; i++)
-  result += *(c + i * 4);
+  result += *(c + i * charSize);
 return (size_t)new std::string(result);"))
   :caster-name "clstr")
 (defparameter +c++-vector-body+
@@ -371,23 +373,17 @@ return (size_t)new ~a(result);")
     (cons (eq 'g (car type)))
     (t nil)))
 (defun pointer-p (ty ps)
-  (and (eq (car ps) 'pointer)
-       (let ((value (cadr ps)))
-         (etypecase value
-           (symbol (if (boundp value)
-                       (typep (eval value) ty)
-                       t))
-           (t (typep value ty))))))
+  (if (symbolp ps)
+      (if (boundp ps)
+          (typep (eval ps) ty)
+          t)
+      (typep ps ty)))
 
 (deftype pointer (type-pointed-to)
-  `(and cons
-        (satisfies ,(lambda (x) (pointer-p type-pointed-to x)))))
+  `(satisfies ,(lambda (x) (pointer-p type-pointed-to x))))
 
-;; TODO: create the real caster body
 (defequiv :c++ (pointer F)
   :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
-  ;; :caster-body (lambda (ty) (format nil "return (size_t)new size_t(~a(o));"
-                                    ;; (caster-name :c++ (cadr ty))))
   :caster-body
   (lambda (ty)
     (format nil
@@ -405,7 +401,7 @@ if (!isSymbol) {
 }
 // It is a symbol, so we have to check in the database
 // if the symbol is already registered there
-if (POINTER_DATABASE.find(*name) == POINTER_DATABASE.end()) {
+if (POINTER_DATABASE.find(*name) != POINTER_DATABASE.end()) {
   return POINTER_DATABASE[*name];
 }
 bool isBound = ecl_to_bool(cl_boundp(o));
@@ -416,7 +412,8 @@ if (isBound) {
   POINTER_DATABASE[*name] = (size_t)new size_t(~:*~a(cl_eval(o)));
 } else {
   // assume there is a default constructor
-  POINTER_DATABASE[*name] = (size_t)new ~a();
+  size_t i = (size_t)new ~a();
+  POINTER_DATABASE[*name] = (size_t)new size_t(i);
 }
 return POINTER_DATABASE[*name];"
 (caster-name :c++ 'string)

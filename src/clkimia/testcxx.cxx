@@ -10,7 +10,10 @@
 #include "test.h"
 
 #define LISP(...) lisp::fromStr(#__VA_ARGS__)
+#define EVAL(...) lisp::eval(#__VA_ARGS__)
 #define TEST_CASE(NAME, ...) { std::cout << "[TEST]: " << NAME << std::endl; \
+                               __VA_ARGS__ }
+#define SUBCASE(NAME, ...) { std::cout << "  - <" << NAME << "> :" << std::endl; \
                                __VA_ARGS__ }
 
 extern "C" void init_clkimia(cl_object);
@@ -44,6 +47,42 @@ namespace lisp {
 
 int main (int argc, char **argv) {
   lisp::initialize(argc, argv);
+
+  TEST_CASE("Pointers of simple types",
+            SUBCASE("with constant integer",
+                    auto o = LISP(42);
+                    assert(!ecl_to_bool(cl_symbolp(o)));
+                    auto i = (int**)pclint(o);
+                    assert(i);
+                    assert(**i == 42);
+                    )
+            SUBCASE("with bound symbol",
+                    EVAL((defparameter *pointer-1* 42));
+                    auto o = LISP(*pointer-1*);
+                    assert(ecl_to_bool(cl_boundp(o)));
+                    assert(ecl_to_bool(cl_symbolp(o)));
+                    { auto ie = (int*)clint(cl_eval(o));
+                      assert(ie);
+                      assert(*ie == 42);
+                    }
+                    auto i = (int**)pclint(o);
+                    assert(i);
+                    assert(**i == 42);
+                    )
+            SUBCASE("with unbound symbol",
+                    auto o = lisp::fromStr("pointer-1-unbound");
+                    assert(ecl_to_bool(cl_symbolp(o)));
+                    assert(!ecl_to_bool(cl_boundp(o)));
+                    auto i = (int**)pclint(o);
+                    assert(i);
+                    assert(*i);
+                    assert(**i == 0);
+                    **i = 1024;
+                    auto oo = lisp::fromStr("pointer-1-unbound");
+                    auto ii = (int**)pclint(o);
+                    assert(**ii == 1024);
+                    )
+            )
 
   TEST_CASE("(vec integer): Vector of integers",
             auto o = LISP( #(1 5 4) );

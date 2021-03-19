@@ -173,32 +173,29 @@ size_t v_of_clint (const cl_object o){
 (assert-equal (translate :c++ '(g 98))
               "_G98")
 ;; undbound symbols are pointers to anything
-(assert (typep `(pointer ,(gensym)) '(pointer integer)))
-(assert (typep `(pointer ,(gensym)) '(pointer lala)))
+(assert (typep (gensym) '(pointer integer)))
+(assert (typep (gensym) '(pointer lala)))
 (defparameter *test-mypointer* 5)
 (let ((myint 5898))
-  (check-type `(pointer ,myint)
+  (check-type myint
               (pointer integer))
-  (check-type '(pointer *test-mypointer*)
+  (check-type *test-mypointer*
               (pointer integer))
-  (assert (typep '(pointer *test-mypointer*) '(pointer integer)))
-  (assert (typep '(pointer 5) '(pointer integer)))
-  (assert-not (typep '(pointer 5.5) '(pointer integer)))
-  (assert-not (typep '(pointer 5.5d0) '(pointer integer)))
-  (assert (typep '(pointer 5.5d0) '(pointer double-float)))
-  (assert-not (typep '(pointer 5.5) '(pointer double-float)))
-  (assert (typep '(pointer myint) '(pointer integer)))
+  (assert (typep *test-mypointer* '(pointer integer)))
+  (assert (typep 5 '(pointer integer)))
+  (assert-not (typep 5.5 '(pointer integer)))
+  (assert-not (typep 5.5d0 '(pointer integer)))
+  (assert (typep 5.5d0 '(pointer double-float)))
+  (assert-not (typep 5.5 '(pointer double-float)))
+  (assert (typep myint '(pointer integer)))
   (let ((*test-mypointer* 5.5))
-    (assert-not (typep '(pointer *test-mypointer*)
+    (assert-not (typep *test-mypointer*
                        '(pointer integer)))))
 
 (assert-equal (translate :c++ '(pointer integer))
               "int*")
 (assert-equal (translate :c++ '(pointer (vec (pointer (pointer integer)))))
               "std::vector< int** >*")
-
-
-;;;; const
 (assert (typep 5 '(const integer)))
 (assert-not (typep 5.5 '(const integer)))
 
