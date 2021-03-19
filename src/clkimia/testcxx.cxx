@@ -55,6 +55,7 @@ int main (int argc, char **argv) {
                     auto i = (int**)pclint(o);
                     assert(i);
                     assert(**i == 42);)
+
             SUBCASE("with bound symbol",
                     EVAL((defparameter *pointer-1* 42));
                     auto o = LISP(*pointer-1*);
@@ -67,6 +68,7 @@ int main (int argc, char **argv) {
                     auto i = (int**)pclint(o);
                     assert(i);
                     assert(**i == 42);)
+
             SUBCASE("with unbound symbol",
                     auto o = lisp::fromStr("pointer-1-unbound");
                     assert(ecl_to_bool(cl_symbolp(o)));
@@ -77,7 +79,7 @@ int main (int argc, char **argv) {
                     assert(**i == 0);
                     **i = 1024;
                     auto oo = lisp::fromStr("pointer-1-unbound");
-                    auto ii = (int**)pclint(o);
+                    auto ii = (int**)pclint(oo);
                     assert(**ii == 1024);)
 
             SUBCASE("Vector of integers immediate",
@@ -98,8 +100,8 @@ int main (int argc, char **argv) {
                     (**i).resize(1000);
                     (**i)[654] = 1325648;
                     auto oo = lisp::fromStr("pointer-to-my-vecs-of-int");
-                    auto ii = (std::vector<int>**)pv_of_clint(o);
-                    assert((**i)[654] == 1325648);)
+                    auto ii = (std::vector<int>**)pv_of_clint(oo);
+                    assert((**ii)[654] == 1325648);)
 
             )
 
