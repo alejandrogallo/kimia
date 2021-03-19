@@ -54,8 +54,7 @@ int main (int argc, char **argv) {
                     assert(!ecl_to_bool(cl_symbolp(o)));
                     auto i = (int**)pclint(o);
                     assert(i);
-                    assert(**i == 42);
-                    )
+                    assert(**i == 42);)
             SUBCASE("with bound symbol",
                     EVAL((defparameter *pointer-1* 42));
                     auto o = LISP(*pointer-1*);
@@ -67,8 +66,7 @@ int main (int argc, char **argv) {
                     }
                     auto i = (int**)pclint(o);
                     assert(i);
-                    assert(**i == 42);
-                    )
+                    assert(**i == 42);)
             SUBCASE("with unbound symbol",
                     auto o = lisp::fromStr("pointer-1-unbound");
                     assert(ecl_to_bool(cl_symbolp(o)));
@@ -80,8 +78,29 @@ int main (int argc, char **argv) {
                     **i = 1024;
                     auto oo = lisp::fromStr("pointer-1-unbound");
                     auto ii = (int**)pclint(o);
-                    assert(**ii == 1024);
-                    )
+                    assert(**ii == 1024);)
+
+            SUBCASE("Vector of integers immediate",
+                    auto o = lisp::eval("`#(,(+ 5 5) 2 3)");
+                    auto i = (std::vector<int>**)pv_of_clint(o);
+                    assert(i);
+                    assert(*i);
+                    assert((**i)[0] == 10);
+                    assert((**i)[1] == 2);
+                    assert((**i)[2] == 3);)
+
+            SUBCASE("Vector of integers with unbound symbol",
+                    auto o = lisp::fromStr("pointer-to-my-vecs-of-int");
+                    auto i = (std::vector<int>**)pv_of_clint(o);
+                    assert(i);
+                    assert(*i);
+                    assert((**i).size() == 0);
+                    (**i).resize(1000);
+                    (**i)[654] = 1325648;
+                    auto oo = lisp::fromStr("pointer-to-my-vecs-of-int");
+                    auto ii = (std::vector<int>**)pv_of_clint(o);
+                    assert((**i)[654] == 1325648);)
+
             )
 
   TEST_CASE("(vec integer): Vector of integers",
