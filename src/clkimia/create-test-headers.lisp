@@ -60,6 +60,14 @@
 
 ;(trace translate-type-dependencies)
 
+
+(defparameter *c++-headers*
+  '(string map vector array cstdlib))
+
+(format t "~{~&#include<~(~a~)>~}" *c++-headers*)
+(format t "~&~&std::map<std::string, size_t> POINTER_DATABASE;")
+
+
 (dolist (name *structs-to-export*)
   (let* ((identifier `(struct ,name))
          (ty-name (struct-spec-name identifier))

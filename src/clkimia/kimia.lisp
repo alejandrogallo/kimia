@@ -386,12 +386,45 @@ return (size_t)new ~a(result);")
 ;; TODO: create the real caster body
 (defequiv :c++ (pointer F)
   :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
-  :caster-body (lambda (ty) (format nil "return (size_t)new size_t(~a(o));"
-                                    (caster-name :c++ (cadr ty))))
+  ;; :caster-body (lambda (ty) (format nil "return (size_t)new size_t(~a(o));"
+                                    ;; (caster-name :c++ (cadr ty))))
+  :caster-body
+  (lambda (ty)
+    (format nil
+"~
+bool isSymbol = ecl_to_bool(cl_symbolp(o));
+auto name
+  = isSymbol
+  ? (std::string*)~a(cl_string(o))
+  : (std::string*)~:*~a(cl_string(cl_gensym(0)))
+  ;
+// it is an immediate value, so return the pointer to its pointer
+if (!isSymbol) {
+  POINTER_DATABASE[*name] = (size_t)new size_t(~a(o));
+  return POINTER_DATABASE[*name];
+}
+// It is a symbol, so we have to check in the database
+// if the symbol is already registered there
+if (POINTER_DATABASE.find(*name) == POINTER_DATABASE.end()) {
+  return POINTER_DATABASE[*name];
+}
+bool isBound = ecl_to_bool(cl_boundp(o));
+// It is not in the database, we have to check if the symbol
+// is bound or unbound
+if (isBound) {
+  //      init from value in pointer ---------v
+  POINTER_DATABASE[*name] = (size_t)new size_t(~:*~a(cl_eval(o)));
+} else {
+  // assume there is a default constructor
+  POINTER_DATABASE[*name] = (size_t)new ~a();
+}
+return POINTER_DATABASE[*name];"
+(caster-name :c++ 'string)
+(caster-name :c++ (cadr ty))
+(translate :c++ (cadr ty))))
   :subtypes (lambda (ty) `(,(cadr ty)))
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
   :caster-name (lambda (ty) (format nil "p~a" (caster-name :c++ (cadr ty)))))
-
 (deftype const (type-pointed-to)
   `(satisfies ,(lambda (x) (typep x type-pointed-to))))
 
