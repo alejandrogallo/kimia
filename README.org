@@ -774,7 +774,6 @@ size_t v_of_clint (const cl_object o){
 
 
 *** Pointers and const
-
 **** Pointer types
 
 A pointer should be declared by the wrapping in a =pointer=
@@ -815,25 +814,22 @@ if (isBound) {
 return POINTER_DATABASE[*name];
 #+end_src
 
+In CL, the implementation is very simple, we will be prefixing the functions
+to generate pointers with a =p=, as is to be read as /pointer to/.
+
  #+begin_src lisp :noweb-ref kimia.codegen :results none :noweb no-export
 (defun pointer-p (ty ps)
-  (and (eq (car ps) 'pointer)
-       (let ((value (cadr ps)))
-         (etypecase value
-           (symbol (if (boundp value)
-                       (typep (eval value) ty)
-                       t))
-           (t (typep value ty))))))
+  (if (symbolp ps)
+      (if (boundp ps)
+          (typep (eval ps) ty)
+          t)
+      (typep ps ty)))
 
 (deftype pointer (type-pointed-to)
-  `(and cons
-        (satisfies ,(lambda (x) (pointer-p type-pointed-to x)))))
+  `(satisfies ,(lambda (x) (pointer-p type-pointed-to x))))
 
-;; TODO: create the real caster body
 (defequiv :c++ (pointer F)
   :translate (lambda (ty) (format nil "~a*" (translate :c++ (cadr ty))))
-  ;; :caster-body (lambda (ty) (format nil "return (size_t)new size_t(~a(o));"
-                                    ;; (caster-name :c++ (cadr ty))))
   :caster-body
   (lambda (ty)
     (format nil
@@ -845,6 +841,35 @@ return POINTER_DATABASE[*name];
   :subtypes (lambda (ty) `(,(cadr ty)))
   :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
   :caster-name (lambda (ty) (format nil "p~a" (caster-name :c++ (cadr ty)))))
+#+end_src
+
+***** Tests
+
+#+begin_src lisp :eval no :noweb-ref test-kimia
+;; undbound symbols are pointers to anything
+(assert (typep (gensym) '(pointer integer)))
+(assert (typep (gensym) '(pointer lala)))
+(defparameter *test-mypointer* 5)
+(let ((myint 5898))
+  (check-type myint
+              (pointer integer))
+  (check-type *test-mypointer*
+              (pointer integer))
+  (assert (typep *test-mypointer* '(pointer integer)))
+  (assert (typep 5 '(pointer integer)))
+  (assert-not (typep 5.5 '(pointer integer)))
+  (assert-not (typep 5.5d0 '(pointer integer)))
+  (assert (typep 5.5d0 '(pointer double-float)))
+  (assert-not (typep 5.5 '(pointer double-float)))
+  (assert (typep myint '(pointer integer)))
+  (let ((*test-mypointer* 5.5))
+    (assert-not (typep *test-mypointer*
+                       '(pointer integer)))))
+
+(assert-equal (translate :c++ '(pointer integer))
+              "int*")
+(assert-equal (translate :c++ '(pointer (vec (pointer (pointer integer)))))
+              "std::vector< int** >*")
 #+end_src
 
 **** Constant modifiers
@@ -861,36 +886,8 @@ return POINTER_DATABASE[*name];
   :caster-body (lambda (ty) (caster-body :c++ (cadr ty))))
  #+end_src
 
-**** Tests
-
-#+begin_src lisp :eval no :noweb-ref test-kimia
-;; undbound symbols are pointers to anything
-(assert (typep `(pointer ,(gensym)) '(pointer integer)))
-(assert (typep `(pointer ,(gensym)) '(pointer lala)))
-(defparameter *test-mypointer* 5)
-(let ((myint 5898))
-  (check-type `(pointer ,myint)
-              (pointer integer))
-  (check-type '(pointer *test-mypointer*)
-              (pointer integer))
-  (assert (typep '(pointer *test-mypointer*) '(pointer integer)))
-  (assert (typep '(pointer 5) '(pointer integer)))
-  (assert-not (typep '(pointer 5.5) '(pointer integer)))
-  (assert-not (typep '(pointer 5.5d0) '(pointer integer)))
-  (assert (typep '(pointer 5.5d0) '(pointer double-float)))
-  (assert-not (typep '(pointer 5.5) '(pointer double-float)))
-  (assert (typep '(pointer myint) '(pointer integer)))
-  (let ((*test-mypointer* 5.5))
-    (assert-not (typep '(pointer *test-mypointer*)
-                       '(pointer integer)))))
-
-(assert-equal (translate :c++ '(pointer integer))
-              "int*")
-(assert-equal (translate :c++ '(pointer (vec (pointer (pointer integer)))))
-              "std::vector< int** >*")
-
-
-;;;; const
+***** Tests
+ #+begin_src lisp :eval no :noweb-ref test-kimia
 (assert (typep 5 '(const integer)))
 (assert-not (typep 5.5 '(const integer)))
 
@@ -903,7 +900,7 @@ return POINTER_DATABASE[*name];
 size_t ccldouble (const cl_object o){
   return (size_t)new double(ecl_to_double(o));
 }")
-#+end_src
+ #+end_src
 
 
 *** The struct
