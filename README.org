@@ -934,8 +934,9 @@ generic data types:
 
   (defun struct-spec-p (ty)
     (and (eq (car ty) 'struct)
-         (typep (cadr ty) '(or cons symbol))
-         (typep (caddr ty) '(or cons symbol))
+         (typep (cadr ty) '(or cons symbol)) ;; name
+         (typep (caddr ty) '(or cons null))  ;; fields container
+         (every (lambda (x) (typep x '(or cons null))) (caddr ty))
          (eql (length ty) 3)))
 
   (defun struct-identifier-p (ty)
@@ -1074,7 +1075,7 @@ generic data types:
   (defun define-struct-c++ (ty)
     (translate-struct-c++ ty))
 
-  (defun struct-check-type (ty cons-struct)
+  (defun struct/check-type (cons-struct ty)
     (check-type cons-struct cons)
     (check-type ty (or struct-spec struct-identifier))
     (let* ((spec (struct-get-expanded-spec ty))
@@ -1177,7 +1178,7 @@ generic data types:
 
   )
 
-(defmacro defgenericstruct (name spec)
+(defmacro defstruct! (name spec)
   (let* ((spec `(struct ,name ,spec))
          (struct-name (struct-spec-name spec))
          (struct-spec-var (struct-spec-symbol struct-name)))
@@ -1203,26 +1204,26 @@ generic data types:
   :caster-header #'struct-caster-header
   :caster-body #'struct-caster-body)
 
-(deftype struct (name)
-  `(and cons
+(deftype struct (name &optional (fields nil))
+  `(and (or null cons)
         (satisfies ,(lambda (x)
-                      (struct-check-type `(struct ,name) x)))))
+                      (struct/check-type x `(struct ,name ,fields))))))
 #+end_src
 
 **** Tests
 
 #+begin_src lisp :eval no :noweb-ref test-data-kimia
-(defgenericstruct
+(defstruct!
     tensor-reader-double
     ((:name string)
      (:lens (vec double-float))))
 
-(defgenericstruct
-    (tensor-reader F)
+(defstruct!
+    (tensor-reader-g F)
     ((:name string)
      (:lens (vec F))))
 
-(defgenericstruct
+(defstruct!
     (davidson-solver A B tensor-field D)
     ((:vectorspace A)
      (:fields (vec B))
@@ -1230,23 +1231,23 @@ generic data types:
      (:mask-tensor (vec tensor-field))
      (:dimension (vec (vec (vec D)) 5))))
 
-(defgenericstruct
+(defstruct!
     (Uttu F)
     ((:name F)))
 
-(defgenericstruct
+(defstruct!
     with-unnammed
     ((:name string)
      (:lens (struct nil ((:lens integer))))))
 
-(defgenericstruct
+(defstruct!
     with-unnammed-and-simple
     ((:name string)
      (:author (struct nil ((:name string))))
      (:lens (struct with-unnamed))))
 
 ;; this example is the MONSTER-STRUCT
-(defgenericstruct
+(defstruct!
     (monster-struct A B C)
     ((:name string)
      (:data (pointer (vec A)))
@@ -1273,7 +1274,7 @@ generic data types:
 (assert-eq (struct-spec-name '(struct tensor-reader-double))
            'tensor-reader-double)
 ;; spec
-(assert-eq (struct-spec-name '(struct (tensor-reader-double A F) some))
+(assert-eq (struct-spec-name '(struct (tensor-reader-double A F) ((:some type))))
            'tensor-reader-double)
 ;; identifier
 (assert-eq (struct-spec-name '(struct (tensor-reader-double A F)))
@@ -1291,9 +1292,9 @@ generic data types:
 
 (assert-equal (struct-template-line '(struct tensor-reader-double))
               "")
-(assert-equal (struct-template-line '(struct (tensor-reader integer)))
+(assert-equal (struct-template-line '(struct (tensor-reader-g integer)))
               "template")
-(assert-equal (struct-template-line '(struct (tensor-reader (g 5))))
+(assert-equal (struct-template-line '(struct (tensor-reader-g (g 5))))
               "template < typename _G5 >")
 (assert-equal (struct-template-line '(struct
                                       (davidson-solver
@@ -1328,12 +1329,20 @@ generic data types:
 (struct-get-expanded-spec '(struct tensor-reader-double))
 
 ;; TYPE CHECKING
-(assert (struct-check-type '(struct tensor-reader-double)
-                           '(:name "hello world" :lens #(5.0d0 9.0d0))))
-(assert-not (struct-check-type '(struct tensor-reader-double)
-                               '(:name "hello world" :lens #(5.0d0 9.0))))
-(assert-not (struct-check-type '(struct tensor-reader-double)
-                               '(:name 5 :lens #(5.0d0 9.0d0))))
+(assert (struct/check-type '(:name "hello world" :lens #(5.0d0 9.0d0))
+                           '(struct tensor-reader-double)))
+(assert-not (struct/check-type '(:name "hello world" :lens #(5.0d0 9.0))
+                               '(struct tensor-reader-double)))
+(assert-not (struct/check-type '(:name 5 :lens #(5.0d0 9.0d0))
+                               '(struct tensor-reader-double)))
+
+;; unnamed structs
+(assert (typep '(struct nil ((:name string))) 'struct-spec))
+(assert (typep '(struct nil nil) 'struct-spec))
+(assert-equal (struct-get-expanded-spec '(STRUCT NIL ((:name string))))
+              '(STRUCT NIL ((:name string))))
+(assert (struct/check-type '(:name "some string")
+                           '(STRUCT NIL ((:name string)))))
 
 (assert (typep '(:name 654.5d0)
                '(struct (Uttu double-float))))
@@ -1892,8 +1901,8 @@ An instantiation of a step should be of the form
     (struct-get-expanded-spec struct-identifier)))
 
 (defun step/check-type (thing step-name)
-  (let ((spec (step/get-struct-expanded-spec thing)))
-    `(check-type thing ,spec)))
+  (let ((spec (step/get-struct-expanded-spec step-name)))
+    `(check-type ,thing ,spec)))
 
 (defun step/get-name (generic-name)
   (etypecase generic-name
@@ -1912,35 +1921,12 @@ An instantiation of a step should be of the form
          (in (getf ulist :in))
          (out (getf ulist :out)))
     `(progn
-       (defgenericstruct ,name ,(caddr (step/spec-to-struct-spec name in out)))
+       (defstruct! ,name ,(caddr (step/spec-to-struct-spec name in out)))
        (setf ,spec-var-name '(:name ,name
                               :in ,in
                               :out ,out
                               :run ,run))
-       ;; (defun ,type-predicate-name (thing)
-       ;;   (check-type thing cons)
-       ;;   (let* ((-name (getf thing :name))
-       ;;          (-in (getf thing :in))
-       ;;          (-in-keys (plist-keys -in))
-       ;;          (-out (getf thing :out))
-       ;;          (-out-keys (plist-keys -out))
-       ;;          (spec ',spec-var-name)
-       ;;          (spec-name (getf spec :name))
-       ;;          (spec-in (getf spec :in))
-       ;;          (spec-out (getf spec :out)))
-       ;;     (and (eq -name spec-name)
-       ;;          (every (lambda (key)
-       ;;                   (let* ((value (getf -in key))
-       ;;                          (pair `(,key ,value)))
-       ;;                     (step-setting-typep pair spec-in)))
-       ;;                 -in-keys)
-       ;;          (every (lambda (key)
-       ;;                   (let* ((value (getf -out key))
-       ;;                          (pair `(,key ,value)))
-       ;;                     (step-setting-typep pair spec-out)))
-       ;;                 -out-keys))))
-       (push ',step-name *KIMIA-TYPES*)
-       )))
+       (push ',step-name *KIMIA-TYPES*))))
  #+end_src
 
 
@@ -1976,6 +1962,19 @@ An instantiation of a step should be of the form
    :doc "The file where the tensor is located")
 :run
   ("runTensorReader" F))
+
+(step/check-type
+ '(:in (:file "tensor.dat"
+        :mode 456)
+   :out (:tensor #(4 6 8)))
+ '(tensor-reader integer))
+
+
+(typep
+ '(:in (:file "tensor.dat"
+        :mode 456)
+   :out (:tensor #(4 6 8)))
+ '(struct (tensor-reader integer)))
 #+end_src
 
 *** Making steps
