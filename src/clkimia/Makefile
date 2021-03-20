@@ -15,10 +15,10 @@ t.o: test-data.lisp
 %.o: %.lisp
 	$(ECL_BIN) --shell lisp-to-obj.lisp -i $<
 
-libclkimiat.a: t.o kimia.o
+libclkimiat.a: test-data.o kimia.o
 	$(ECL_BIN) \
 		--shell create-static-library.lisp \
-		-i t.o -o clkimiat.a --init init_clkimiat
+		-i test-data.o -o clkimiat.a --init init_clkimiat
 
 libclkimia.a: kimia.o
 	$(ECL_BIN) \

@@ -311,6 +311,15 @@ struct Uttu {
 (assert-equal (caster-signature :c++ '(struct (uttu integer)))
               "size_t s_uttu_with_clint (const cl_object o);")
 
+
+(assert-equal (struct-caster-body '(struct (uttu integer)))
+              "return (size_t)new Uttu< int >{
+  *(int*)clint(cl_getf(2, o, c_string_to_object(\":NAME\")))
+};")
+
+(assert-equal (struct-caster-header '(struct (uttu integer)))
+              "size_t clint (const cl_object o);")
+
 (assert-equal (caster-snippet :c++ '(struct (uttu integer)))
 "size_t clint (const cl_object o);
 size_t s_uttu_with_clint (const cl_object o){
@@ -355,13 +364,11 @@ struct MonsterStruct< int, double, float >;")
 (typep '(const (struct monster-struct))
        '(or (const struct-identifier) (const struct-spec)))
 
-(assert-equal
+#+nil (assert-equal
  (caster-snippet :c++ '(struct (monster-struct integer double-float single-float)))
 "size_t clstr (const cl_object o);
 size_t pv_of_clint (const cl_object o);
-size_t s_nil (const cl_object o);
-size_t s_nil (const cl_object o);
-size_t s_nil (const cl_object o);
+size_t cs_nil (const cl_object o);
 size_t v_of_cldouble (const cl_object o);
 size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
   return (size_t)new MonsterStruct< int, double, float >{
@@ -414,40 +421,6 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
                                     :type (member :binary :text)
                                     :default :no-name)
                                   'step-setting-spec)))
-(defstep (tensor-reader F)
-:in
-  (:name :file
-   :type string
-   :default "input.dat"
-   :required t
-   :doc "The file where the tensor is located")
-  (:name :mode
-   :type (member :binary :text)
-   :default :binary
-   :required t
-   :doc "The encoding and format that the tensor is written in")
-:out
-  (:name :tensor
-   :type (tensor F)
-   :doc "The file where the tensor is located")
-:run
-  ("runTensorReader" F))
-
-(check-type (tensor-reader-default)
-            tensor-reader)
-(let (step default)
-  (setq step
-        '(:name Tensor-Reader
-          :in (:file "asdf"
-               :mode :binary)
-          :out (:tensor "Integral")))
-  (setq default
-        (tensor-reader-default))
-
-  (check-type default tensor-reader)
-  (check-type step tensor-reader))
-(let ((step (tensor-reader-default)))
-  (eval `(check-step-type ,step)))
 (assert (defstep-keywords))
 
 (setf *mode-spec* '(:name :mode

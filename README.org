@@ -1168,11 +1168,12 @@ generic data types:
               constructor)))
 
   (defun struct-caster-header (ty)
-    (let* ((subtypes (subtypes :c++ ty)))
+    (let* ((spec (struct-get-expanded-spec ty))
+           (subtypes (subtypes :c++ spec))
+           (subtypes-no-unnamed (remove-if #'struct-unnamed-p subtypes)))
       (format nil "~{~a~^~%~}"
-              (mapcar (lambda (x)
-                        (caster-signature :c++ x))
-                      (remove-if #'struct-unnamed-p subtypes)))))
+              (mapcar (lambda (x) (caster-signature :c++ x))
+                      subtypes-no-unnamed))))
 
   )
 
@@ -1935,45 +1936,6 @@ An instantiation of a step should be of the form
        )))
  #+end_src
 
- For instance we can use this macro in the followig manner
-
- #+begin_src lisp :noweb yes :noweb-ref test-kimia.step :eval no
-<<defstep-tensor-reader-example>>
-
-(check-type (tensor-reader-default)
-            tensor-reader)
- #+end_src
-
- and we can make sure that it woks for example as
-
- #+begin_src lisp :results none :noweb-ref test-kimia.step :eval no
-(let (step default)
-  (setq step
-        '(:name Tensor-Reader
-          :in (:file "asdf"
-               :mode :binary)
-          :out (:tensor "Integral")))
-  (setq default
-        (tensor-reader-default))
-
-  (check-type default tensor-reader)
-  (check-type step tensor-reader))
- #+end_src
-
-A very simple macro to check the type of a step is defined below
-
- #+begin_src lisp :results none :noweb-ref kimia.step
-(defmacro check-step-type (step)
-  (let ((name (getf step :name)))
-    `(let ((step ',step))
-       (check-type step ,name))))
-#+end_src
-
-which we can use like
-#+begin_src lisp :noweb-ref test-kimia.step :eval no
-(let ((step (tensor-reader-default)))
-  (eval `(check-step-type ,step)))
-#+end_src
 
 **** Tests
 #+begin_src lisp :noweb yes :noweb-ref test-kimia.step :eval no

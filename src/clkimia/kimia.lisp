@@ -669,11 +669,12 @@ return POINTER_DATABASE[*name];"
               constructor)))
 
   (defun struct-caster-header (ty)
-    (let* ((subtypes (subtypes :c++ ty)))
+    (let* ((spec (struct-get-expanded-spec ty))
+           (subtypes (subtypes :c++ spec))
+           (subtypes-no-unnamed (remove-if #'struct-unnamed-p subtypes)))
       (format nil "~{~a~^~%~}"
-              (mapcar (lambda (x)
-                        (caster-signature :c++ x))
-                      (remove-if #'struct-unnamed-p subtypes)))))
+              (mapcar (lambda (x) (caster-signature :c++ x))
+                      subtypes-no-unnamed))))
 
   )
 
@@ -855,36 +856,18 @@ return POINTER_DATABASE[*name];"
        ;;                 -out-keys))))
        (push ',step-name *KIMIA-TYPES*)
        )))
-(defmacro check-step-type (step)
-  (let ((name (getf step :name)))
-    `(let ((step ',step))
-       (check-type step ,name))))
-;;(defmacro make-stepq (name &rest args)
-;;  (check-type name symbol)
-;;  (let* ((in-out (consume-in-out args))
-;;         (in (car in-out))
-;;         (out (cadr in-out))
-;;         (step `(:name ,name
-;;                 :in ,in
-;;                 :out ,out)))
-;;    `(progn
-;;       (check-step-type ,step)
-;;       ',step
-;;       )))
-;;
 ;;(defun make-step (name &rest args)
-;;  (check-type name symbol)
-;;  (let* ((in-out (consume-in-out args))
-;;         (in (car in-out))
-;;         (out (cadr in-out))
+;;  (check-type name (or cons symbol))
+;;  (let* ((ulist (ulist-to-plist args (defstep-keywords)))
+;;         (in (getf ulist :in))
+;;         (out (getf ulist :out))
 ;;         (type)
-;;         (step)
-;;         )
+;;         (step))
 ;;    (setq type name)
 ;;    (setq step `(:name ,name
-;;                 :in ,in
-;;                 :out ,out))
-;;    (eval `(check-step-type ,step))
+;;                 :struct ((:in ,in)
+;;                          (:out ,out))))
+;;    ;; (eval `(check-step-type ,step))
 ;;    step))
 (defparameter *KIMIA-STEPS* '())
 
