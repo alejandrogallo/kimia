@@ -37,8 +37,8 @@ order.
        (format t "~%LISP::DONE evaluating KIMIA~%")
        kimia::*KIMIA-STEPS*)))
 
-;(defmacro >> (&rest args)
-;  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
+(defmacro $ (&rest args)
+  `(push (make-step ,@args) *KIMIA-STEPS*))
 #+end_src
 
 ** Utils

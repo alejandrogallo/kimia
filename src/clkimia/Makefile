@@ -9,7 +9,7 @@ ECL_INCLUDE    ?= -I${ECL_BUILD_PATH}/include
 ECL_LIB        ?= -L${ECL_BUILD_PATH}/lib -lecl -leclffi -leclgc -leclatomic
 GMP_LIB ?= -L$(GMP_PATH) -lgmp
 
-t.o: test-data.lisp
+test-data.o: test-data.lisp kimia.lisp
 	$(ECL_BIN) --load kimia.lisp --shell lisp-to-obj.lisp -i test-data.lisp
 
 %.o: %.lisp
