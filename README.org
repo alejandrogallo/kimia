@@ -1361,6 +1361,15 @@ struct Uttu {
 (assert-equal (caster-signature :c++ '(struct (uttu integer)))
               "size_t s_uttu_with_clint (const cl_object o);")
 
+
+(assert-equal (struct-caster-body '(struct (uttu integer)))
+              "return (size_t)new Uttu< int >{
+  ,*(int*)clint(cl_getf(2, o, c_string_to_object(\":NAME\")))
+};")
+
+(assert-equal (struct-caster-header '(struct (uttu integer)))
+              "size_t clint (const cl_object o);")
+
 (assert-equal (caster-snippet :c++ '(struct (uttu integer)))
 "size_t clint (const cl_object o);
 size_t s_uttu_with_clint (const cl_object o){
@@ -1405,13 +1414,11 @@ struct MonsterStruct< int, double, float >;")
 (typep '(const (struct monster-struct))
        '(or (const struct-identifier) (const struct-spec)))
 
-(assert-equal
+,#+nil (assert-equal
  (caster-snippet :c++ '(struct (monster-struct integer double-float single-float)))
 "size_t clstr (const cl_object o);
 size_t pv_of_clint (const cl_object o);
-size_t s_nil (const cl_object o);
-size_t s_nil (const cl_object o);
-size_t s_nil (const cl_object o);
+size_t cs_nil (const cl_object o);
 size_t v_of_cldouble (const cl_object o);
 size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
   return (size_t)new MonsterStruct< int, double, float >{
