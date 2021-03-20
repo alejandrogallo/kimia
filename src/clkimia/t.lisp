@@ -75,6 +75,12 @@
               '(:missing nil))
 (assert-equal (ulist-to-plist '(:in 654 9 8 :key :word) '())
               '())
+(assert-equal (ulist-to-plist '(:in (:la 654) (:lo 9) (:lu 8) (:li :key)
+                                :out (this) (and) (that) (and) (well)
+                                :fun 5 6)
+                              '(:in :out :fun))
+              '(:IN ((:LA 654) (:LO 9) (:LU 8) (:LI :KEY)) :OUT
+                ((THIS) (AND) (THAT) (AND) (WELL)) :FUN (5 6)))
 (assert (string= (c++-type-name 'tensor-reader) "TensorReader"))
 (assert (string= (c++-type-name "TeNsor-ReAder") "TensorReader"))
 (assert (string= (c-type-name "TeNsor-ReAder") "tensor_reader_t"))
@@ -394,40 +400,84 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
                  :type (member :binary :text)
                  :doc "todo")
                'step-setting-spec))
-;; (defstep (tensor-reader F)
-;; :in
-;;   (:name :file
-;;    :type string
-;;    :default "input.dat"
-;;    :required t
-;;    :doc "The file where the tensor is located")
-;;   (:name :mode
-;;    :type (member :binary :text)
-;;    :default :binary
-;;    :required t
-;;    :doc "The encoding and format that the tensor is written in")
-;; :out
-;;   (:name :tensor
-;;    :type (tensor F)
-;;    :doc "The file where the tensor is located")
-;; :run
-;;   ("runTensorReader" F))
-;; 
-;; (check-type (tensor-reader-default)
-;;             tensor-reader)
-;; (let (step default)
-;;   (setq step
-;;         '(:name Tensor-Reader
-;;           :in (:file "asdf"
-;;                :mode :binary)
-;;           :out (:tensor "Integral")))
-;;   (setq default
-;;         (tensor-reader-default))
-;; 
-;;   (check-type default tensor-reader)
-;;   (check-type step tensor-reader))
-;; (let ((step (tensor-reader-default)))
-;;   (eval `(check-step-type ,step)))
+;; TODO: checkout the error messages
+(assert-not (ignore-errors (typep '(:name mode
+                                    :type (member :binary :text)
+                                    :doc "todo")
+                                  'step-setting-spec)))
+(assert-not (ignore-errors (typep '(:name mode
+                                    :type (member :binary :text)
+                                    :default :no-name
+                                    :doc "todo")
+                                  'step-setting-spec)))
+(assert-not (ignore-errors (typep '(:name mode
+                                    :type (member :binary :text)
+                                    :default :no-name)
+                                  'step-setting-spec)))
+(defstep (tensor-reader F)
+:in
+  (:name :file
+   :type string
+   :default "input.dat"
+   :required t
+   :doc "The file where the tensor is located")
+  (:name :mode
+   :type (member :binary :text)
+   :default :binary
+   :required t
+   :doc "The encoding and format that the tensor is written in")
+:out
+  (:name :tensor
+   :type (tensor F)
+   :doc "The file where the tensor is located")
+:run
+  ("runTensorReader" F))
+
+(check-type (tensor-reader-default)
+            tensor-reader)
+(let (step default)
+  (setq step
+        '(:name Tensor-Reader
+          :in (:file "asdf"
+               :mode :binary)
+          :out (:tensor "Integral")))
+  (setq default
+        (tensor-reader-default))
+
+  (check-type default tensor-reader)
+  (check-type step tensor-reader))
+(let ((step (tensor-reader-default)))
+  (eval `(check-step-type ,step)))
+(assert (defstep-keywords))
+
+(setf *mode-spec* '(:name :mode
+                    :type (member :binary :text)
+                    :doc "Mode of the reading"))
+
+(setf *file-spec* '(:name :file
+                    :type string
+                    :doc "File name"))
+
+(assert (step-setting-typep '(:mode :binary) `(,*mode-spec* ,*file-spec*)))
+
+(defstep (tensor-reader F)
+:in
+  (:name :file
+   :type string
+   :default "input.dat"
+   :required t
+   :doc "The file where the tensor is located")
+  (:name :mode
+   :type F
+   :default :binary
+   :required t
+   :doc "The encoding and format that the tensor is written in")
+:out
+  (:name :tensor
+   :type (vec F)
+   :doc "The file where the tensor is located")
+:run
+  ("runTensorReader" F))
 ;; (mk-step
 ;;  'Tensor-Reader
 ;;  :in
