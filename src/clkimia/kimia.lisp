@@ -808,8 +808,13 @@ return POINTER_DATABASE[*name];"
     `(struct ,step-name ((:in (const ,in-struct))
                          (:out ,out-struct)))))
 
+(defun step/get-name (generic-name)
+  (etypecase generic-name
+            (symbol generic-name)
+            (cons (car generic-name))))
+
 (defun step/get-spec-symbol (name)
-  (intern (format nil "~@:(~a-step-spec~)" name)))
+  (intern (format nil "~@:(~a-step-spec~)" (step/get-name name))))
 (defun step/get-spec (name) (eval (step/get-spec-symbol name)))
 (defun step/get-struct-spec (step-name)
   (let ((struct-identifier `(struct ,step-name)))
@@ -823,10 +828,19 @@ return POINTER_DATABASE[*name];"
   (let ((spec (step/get-struct-expanded-spec step-name)))
     (eval `(check-type ',thing ,spec))))
 
-(defun step/get-name (generic-name)
-  (etypecase generic-name
-            (symbol generic-name)
-            (cons (car generic-name))))
+;; todo generalize out of c++
+(defun step/run-function-name (lang name)
+  (flet ((fun-format (fname) (etypecase fname
+                               (symbol (c++-var-name fname))
+                               (string fname))))
+    (let* ((spec (step/get-spec name))
+           (run (getf spec :run)))
+      (etypecase run
+        (cons (format nil "~a<~{~a~^, ~}>"
+                      (fun-format (car run))
+                      (mapcar (lambda (x) (translate lang x))
+                              (cdr name))))
+        ((or string symbol) (fun-format run))))))
 
 (defparameter *KIMIA-TYPES* '())
 (defmacro defstep (name &rest args)
@@ -836,9 +850,11 @@ return POINTER_DATABASE[*name];"
          (spec-var-name (step/get-spec-symbol step-name))
          (default-type-fn (intern (format nil "~@:(~a~)-DEFAULT" step-name)))
          (ulist (ulist-to-plist args (defstep-keywords)))
-         (run (getf ulist :run))
+         (run (car (getf ulist :run)))
          (in (getf ulist :in))
          (out (getf ulist :out)))
+    (unless run (error "Please provide a run function name in a :run field."))
+    (assert (equal (type-of run) (type-of name)))
     `(progn
        (defstruct! ,name ,(caddr (step/spec-to-struct-spec name in out)))
        (setf ,spec-var-name '(:name ,name
@@ -851,11 +867,14 @@ return POINTER_DATABASE[*name];"
   (let* ((ulist (ulist-to-plist args (defstep-keywords)))
          (in (getf ulist :in))
          (out (getf ulist :out))
+         (run (getf ulist :run))
          (step `(:name ,name
+                 :caster-name-c++ ,(caster-name :c++ `(struct ,name))
+                 :run-name-c++ ,(step/run-function-name :c++ name)
                  :struct (:in ,in
                           :out ,out))))
-    step
-    (eval `(step/check-type ',(getf step :struct) ',name))))
+    (eval `(step/check-type ',(getf step :struct) ',name))
+    step))
 ;;
 (defparameter *KIMIA-STEPS* '())
 
@@ -870,4 +889,5 @@ return POINTER_DATABASE[*name];"
        kimia::*KIMIA-STEPS*)))
 
 (defmacro $ (&rest args)
-  `(push (make-step ,@args) *KIMIA-STEPS*))
+  (let ((step (eval `(make-step ,@args))))
+        `(setf *KIMIA-STEPS* '(,@*KIMIA-STEPS* ,step))))

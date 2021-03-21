@@ -461,8 +461,7 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
   (:name :tensor
    :type (vec F)
    :doc "The file where the tensor is located")
-  :run
-  ("runTensorReader" F))
+  :run ("runTensorReader" F))
 
 (let* ((tr-value '(:in (:file "tensor.dat"
                         :mode 456)
@@ -486,11 +485,9 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
  :out
  :tensor #(5 6 8))
 
-(defvar *a* 65)
-
 ($ '(tensor-reader integer)
  :in
- :file "tensor.dat"
+ :file "file.dat"
  :mode 505
  :out
  :tensor #(5 6 8))
