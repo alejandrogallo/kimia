@@ -435,8 +435,9 @@ return POINTER_DATABASE[*name];"
 
   (defun struct-spec-p (ty)
     (and (eq (car ty) 'struct)
-         (typep (cadr ty) '(or cons symbol))
-         (typep (caddr ty) '(or cons symbol))
+         (typep (cadr ty) '(or cons symbol)) ;; name
+         (typep (caddr ty) '(or cons null))  ;; fields container
+         (every (lambda (x) (typep x '(or cons null))) (caddr ty))
          (eql (length ty) 3)))
 
   (defun struct-identifier-p (ty)
@@ -575,7 +576,7 @@ return POINTER_DATABASE[*name];"
   (defun define-struct-c++ (ty)
     (translate-struct-c++ ty))
 
-  (defun struct-check-type (ty cons-struct)
+  (defun struct/check-type (cons-struct ty)
     (check-type cons-struct cons)
     (check-type ty (or struct-spec struct-identifier))
     (let* ((spec (struct-get-expanded-spec ty))
@@ -678,7 +679,7 @@ return POINTER_DATABASE[*name];"
 
   )
 
-(defmacro defgenericstruct (name spec)
+(defmacro defstruct! (name spec)
   (let* ((spec `(struct ,name ,spec))
          (struct-name (struct-spec-name spec))
          (struct-spec-var (struct-spec-symbol struct-name)))
@@ -704,10 +705,10 @@ return POINTER_DATABASE[*name];"
   :caster-header #'struct-caster-header
   :caster-body #'struct-caster-body)
 
-(deftype struct (name)
-  `(and cons
+(deftype struct (name &optional (fields nil))
+  `(and (or null cons)
         (satisfies ,(lambda (x)
-                      (struct-check-type `(struct ,name) x)))))
+                      (struct/check-type x `(struct ,name ,fields))))))
 (defun translate-enum-c++ (ty)
   (let* ((ty-name (cadr ty))
          (name (if ty-name (c++-type-name ty-name) ""))
@@ -807,8 +808,8 @@ return POINTER_DATABASE[*name];"
     (struct-get-expanded-spec struct-identifier)))
 
 (defun step/check-type (thing step-name)
-  (let ((spec (step/get-struct-expanded-spec thing)))
-    `(check-type thing ,spec)))
+  (let ((spec (step/get-struct-expanded-spec step-name)))
+    (eval `(check-type ',thing ,spec))))
 
 (defun step/get-name (generic-name)
   (etypecase generic-name
@@ -827,35 +828,12 @@ return POINTER_DATABASE[*name];"
          (in (getf ulist :in))
          (out (getf ulist :out)))
     `(progn
-       (defgenericstruct ,name ,(caddr (step/spec-to-struct-spec name in out)))
+       (defstruct! ,name ,(caddr (step/spec-to-struct-spec name in out)))
        (setf ,spec-var-name '(:name ,name
                               :in ,in
                               :out ,out
                               :run ,run))
-       ;; (defun ,type-predicate-name (thing)
-       ;;   (check-type thing cons)
-       ;;   (let* ((-name (getf thing :name))
-       ;;          (-in (getf thing :in))
-       ;;          (-in-keys (plist-keys -in))
-       ;;          (-out (getf thing :out))
-       ;;          (-out-keys (plist-keys -out))
-       ;;          (spec ',spec-var-name)
-       ;;          (spec-name (getf spec :name))
-       ;;          (spec-in (getf spec :in))
-       ;;          (spec-out (getf spec :out)))
-       ;;     (and (eq -name spec-name)
-       ;;          (every (lambda (key)
-       ;;                   (let* ((value (getf -in key))
-       ;;                          (pair `(,key ,value)))
-       ;;                     (step-setting-typep pair spec-in)))
-       ;;                 -in-keys)
-       ;;          (every (lambda (key)
-       ;;                   (let* ((value (getf -out key))
-       ;;                          (pair `(,key ,value)))
-       ;;                     (step-setting-typep pair spec-out)))
-       ;;                 -out-keys))))
-       (push ',step-name *KIMIA-TYPES*)
-       )))
+       (push ',step-name *KIMIA-TYPES*))))
 ;;(defun make-step (name &rest args)
 ;;  (check-type name (or cons symbol))
 ;;  (let* ((ulist (ulist-to-plist args (defstep-keywords)))
@@ -881,5 +859,5 @@ return POINTER_DATABASE[*name];"
        (format t "~%LISP::DONE evaluating KIMIA~%")
        kimia::*KIMIA-STEPS*)))
 
-;(defmacro >> (&rest args)
-;  `(push (mk-stepq ,@args) *KIMIA-STEPS*))
+(defmacro $ (&rest args)
+  `(push (make-step ,@args) *KIMIA-STEPS*))

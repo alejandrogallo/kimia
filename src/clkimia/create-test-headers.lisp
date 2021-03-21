@@ -5,18 +5,19 @@
 (in-package :kimia)
 
 (defparameter *structs-to-export*
-      '(tensor-reader-double
-        (tensor-reader integer)
-        (tensor-reader double-float)
-        (tensor-reader single-float)
-        (tensor-reader (vec integer))
-        (Uttu string)
-        (Uttu (vec string))
-        ;(Uttu (struct (Uttu string)))
-        ;(Uttu (struct (struct tenso-reader-double)))
-        (davidson-solver integer double-float double-float integer)
-        (monster-struct integer double-float integer)
-        ))
+  '(tensor-reader-double
+     (tensor-reader-g integer)
+     (tensor-reader-g double-float)
+     (tensor-reader-g single-float)
+     (tensor-reader-g (vec integer))
+     (tensor-reader-g (vec double-float))
+     (Uttu string)
+     (Uttu (vec string))
+     ;(Uttu (struct (Uttu string)))
+     ;(Uttu (struct (struct tenso-reader-double)))
+     (davidson-solver integer double-float double-float integer)
+     (monster-struct integer double-float integer)
+     ))
 
 (defparameter *translated-types* nil)
 
@@ -62,7 +63,7 @@
 
 
 (defparameter *c++-headers*
-  '(string map vector array cstdlib))
+  '(string map vector array cstdlib ecl/ecl.h))
 
 (format t "~{~&#include<~(~a~)>~}" *c++-headers*)
 (format t "~&~&std::map<std::string, size_t> POINTER_DATABASE;")

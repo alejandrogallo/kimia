@@ -223,7 +223,7 @@ size_t ccldouble (const cl_object o){
 (assert-eq (struct-spec-name '(struct tensor-reader-double))
            'tensor-reader-double)
 ;; spec
-(assert-eq (struct-spec-name '(struct (tensor-reader-double A F) some))
+(assert-eq (struct-spec-name '(struct (tensor-reader-double A F) ((:some type))))
            'tensor-reader-double)
 ;; identifier
 (assert-eq (struct-spec-name '(struct (tensor-reader-double A F)))
@@ -241,9 +241,9 @@ size_t ccldouble (const cl_object o){
 
 (assert-equal (struct-template-line '(struct tensor-reader-double))
               "")
-(assert-equal (struct-template-line '(struct (tensor-reader integer)))
+(assert-equal (struct-template-line '(struct (tensor-reader-g integer)))
               "template")
-(assert-equal (struct-template-line '(struct (tensor-reader (g 5))))
+(assert-equal (struct-template-line '(struct (tensor-reader-g (g 5))))
               "template < typename _G5 >")
 (assert-equal (struct-template-line '(struct
                                       (davidson-solver
@@ -278,12 +278,20 @@ size_t ccldouble (const cl_object o){
 (struct-get-expanded-spec '(struct tensor-reader-double))
 
 ;; TYPE CHECKING
-(assert (struct-check-type '(struct tensor-reader-double)
-                           '(:name "hello world" :lens #(5.0d0 9.0d0))))
-(assert-not (struct-check-type '(struct tensor-reader-double)
-                               '(:name "hello world" :lens #(5.0d0 9.0))))
-(assert-not (struct-check-type '(struct tensor-reader-double)
-                               '(:name 5 :lens #(5.0d0 9.0d0))))
+(assert (struct/check-type '(:name "hello world" :lens #(5.0d0 9.0d0))
+                           '(struct tensor-reader-double)))
+(assert-not (struct/check-type '(:name "hello world" :lens #(5.0d0 9.0))
+                               '(struct tensor-reader-double)))
+(assert-not (struct/check-type '(:name 5 :lens #(5.0d0 9.0d0))
+                               '(struct tensor-reader-double)))
+
+;; unnamed structs
+(assert (typep '(struct nil ((:name string))) 'struct-spec))
+(assert (typep '(struct nil nil) 'struct-spec))
+(assert-equal (struct-get-expanded-spec '(STRUCT NIL ((:name string))))
+              '(STRUCT NIL ((:name string))))
+(assert (struct/check-type '(:name "some string")
+                           '(STRUCT NIL ((:name string)))))
 
 (assert (typep '(:name 654.5d0)
                '(struct (Uttu double-float))))
@@ -434,7 +442,7 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
 (assert (step-setting-typep '(:mode :binary) `(,*mode-spec* ,*file-spec*)))
 
 (defstep (tensor-reader F)
-:in
+  :in
   (:name :file
    :type string
    :default "input.dat"
@@ -445,12 +453,26 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
    :default :binary
    :required t
    :doc "The encoding and format that the tensor is written in")
-:out
+  :out
   (:name :tensor
    :type (vec F)
    :doc "The file where the tensor is located")
-:run
+  :run
   ("runTensorReader" F))
+
+(let* ((tr-value '(:in (:file "tensor.dat"
+                        :mode 456)
+                   :out (:tensor #(4 6 8)))))
+  (step/check-type tr-value '(tensor-reader integer))
+  (struct/check-type tr-value '(struct (tensor-reader integer)))
+  (assert (typep tr-value '(struct (tensor-reader integer))))
+
+  ;; make it fail
+  (setf (getf (getf tr-value :in) :mode) 456.5)
+  (assert-not (typep '(:in (:file "tensor.dat"
+                            :mode 456.5)
+                       :out (:tensor #(4 6 8)))
+                     '(struct (tensor-reader integer)))))
 ;; (mk-step
 ;;  'Tensor-Reader
 ;;  :in

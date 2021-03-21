@@ -1,15 +1,15 @@
 (in-package :kimia)
-(defgenericstruct
+(defstruct!
     tensor-reader-double
     ((:name string)
      (:lens (vec double-float))))
 
-(defgenericstruct
-    (tensor-reader F)
+(defstruct!
+    (tensor-reader-g F)
     ((:name string)
      (:lens (vec F))))
 
-(defgenericstruct
+(defstruct!
     (davidson-solver A B tensor-field D)
     ((:vectorspace A)
      (:fields (vec B))
@@ -17,23 +17,23 @@
      (:mask-tensor (vec tensor-field))
      (:dimension (vec (vec (vec D)) 5))))
 
-(defgenericstruct
+(defstruct!
     (Uttu F)
     ((:name F)))
 
-(defgenericstruct
+(defstruct!
     with-unnammed
     ((:name string)
      (:lens (struct nil ((:lens integer))))))
 
-(defgenericstruct
+(defstruct!
     with-unnammed-and-simple
     ((:name string)
      (:author (struct nil ((:name string))))
      (:lens (struct with-unnamed))))
 
 ;; this example is the MONSTER-STRUCT
-(defgenericstruct
+(defstruct!
     (monster-struct A B C)
     ((:name string)
      (:data (pointer (vec A)))

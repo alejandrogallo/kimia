@@ -1,4 +1,5 @@
 test: testcxx
+	$(ECL_BIN) --load kimia.lisp --shell t.lisp
 
 
 CONFIG = gcc

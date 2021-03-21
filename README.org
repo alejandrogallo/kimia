@@ -1902,7 +1902,7 @@ An instantiation of a step should be of the form
 
 (defun step/check-type (thing step-name)
   (let ((spec (step/get-struct-expanded-spec step-name)))
-    `(check-type ,thing ,spec)))
+    (eval `(check-type ',thing ,spec))))
 
 (defun step/get-name (generic-name)
   (etypecase generic-name
@@ -1945,7 +1945,7 @@ An instantiation of a step should be of the form
 (assert (step-setting-typep '(:mode :binary) `(,*mode-spec* ,*file-spec*)))
 
 (defstep (tensor-reader F)
-:in
+  :in
   (:name :file
    :type string
    :default "input.dat"
@@ -1956,25 +1956,26 @@ An instantiation of a step should be of the form
    :default :binary
    :required t
    :doc "The encoding and format that the tensor is written in")
-:out
+  :out
   (:name :tensor
    :type (vec F)
    :doc "The file where the tensor is located")
-:run
+  :run
   ("runTensorReader" F))
 
-(step/check-type
- '(:in (:file "tensor.dat"
-        :mode 456)
-   :out (:tensor #(4 6 8)))
- '(tensor-reader integer))
+(let* ((tr-value '(:in (:file "tensor.dat"
+                        :mode 456)
+                   :out (:tensor #(4 6 8)))))
+  (step/check-type tr-value '(tensor-reader integer))
+  (struct/check-type tr-value '(struct (tensor-reader integer)))
+  (assert (typep tr-value '(struct (tensor-reader integer))))
 
-
-(typep
- '(:in (:file "tensor.dat"
-        :mode 456)
-   :out (:tensor #(4 6 8)))
- '(struct (tensor-reader integer)))
+  ;; make it fail
+  (setf (getf (getf tr-value :in) :mode) 456.5)
+  (assert-not (typep '(:in (:file "tensor.dat"
+                            :mode 456.5)
+                       :out (:tensor #(4 6 8)))
+                     '(struct (tensor-reader integer)))))
 #+end_src
 
 *** Making steps
