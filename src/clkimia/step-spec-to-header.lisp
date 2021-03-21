@@ -1,4 +1,3 @@
-;; taritz: ./ecl --shell %
 (load "kimia.lisp")
 (load "flagis.lisp")
 (in-package :kimia)
@@ -21,7 +20,4 @@
     (with-open-file (f out-file :direction :output
                                 :if-exists :supersede)
       (format f "~&#pragma once~%~%")
-      (format f "~&~a" (step/translate-struct :c++ (getf (eval spec) :name)))
-      )
-
-    ))
+      (format f "~&~a" (step/translate-struct :c++ (getf (eval spec) :name))))))

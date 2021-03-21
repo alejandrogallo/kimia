@@ -7,6 +7,7 @@
 #include <iterator>
 #include <cwchar>
 #include <ecl/ecl.h>
+#include <Generated.hpp>
 
 extern "C" void init_clkimia(cl_object cblock);
 extern cl_object struct_get_fields(cl_object);
@@ -225,6 +226,9 @@ int main(int argc, char **argv) {
     std::cout << "c++         : DONT KNOW" << std::endl;
     std::cout << "appartenly  : " << describeEclObject(output) << std::endl;
   }
+
+  SumVector<double> s {{{5.5}}, {8.8}};
+  std::cout << s.out.sum << std::endl;
 
   // cl_object number(lisp::eval_lisp("(makeanumber)"));
   // std::cout << "The number is " << number->SF.SFVAL << std::endl;

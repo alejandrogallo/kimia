@@ -49,6 +49,10 @@ $(ECL_BIN) --eval "(require 'cmp)" \
            --eval "(quit)"
 endef
 
+src/main/Generated.hpp: $(CLKIMIA_STEPS)
+	(cd src/clkimia/; \
+		$(ECL_BIN) --shell create-master-header.lisp \
+		$(patsubst %,-i %,$(abspath $<)) -o $(abspath $@))
 
 %.hpp: %.lisp
 	(cd src/clkimia/; \
