@@ -709,6 +709,18 @@ return POINTER_DATABASE[*name];"
   `(and (or null cons)
         (satisfies ,(lambda (x)
                       (struct/check-type x `(struct ,name ,fields))))))
+(deftype choice (type elements)
+  `(and ,type
+    (satisfies ,(lambda (x) (typep elements 'cons)))
+    (satisfies ,(lambda (x) (every (lambda (x) (typep x type)) elements)))
+    (satisfies ,(lambda (x) (member x elements :test #'equal)))))
+
+(defequiv :c++ (choice type elements)
+  :translate (lambda (ty) (translate :c++ (cadr ty)))
+  :caster-name (lambda (ty) (caster-name :c++ (cadr ty)))
+  :subtypes (lambda (ty) `(,(cadr ty)))
+  :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
+  :caster-body (lambda (ty) (caster-body :c++ (cadr ty))))
 (defun translate-enum-c++ (ty)
   (let* ((ty-name (cadr ty))
          (name (if ty-name (c++-type-name ty-name) ""))
@@ -834,19 +846,17 @@ return POINTER_DATABASE[*name];"
                               :out ,out
                               :run ,run))
        (push ',step-name *KIMIA-TYPES*))))
-;;(defun make-step (name &rest args)
-;;  (check-type name (or cons symbol))
-;;  (let* ((ulist (ulist-to-plist args (defstep-keywords)))
-;;         (in (getf ulist :in))
-;;         (out (getf ulist :out))
-;;         (type)
-;;         (step))
-;;    (setq type name)
-;;    (setq step `(:name ,name
-;;                 :struct ((:in ,in)
-;;                          (:out ,out))))
-;;    ;; (eval `(check-step-type ,step))
-;;    step))
+(defun make-step (name &rest args)
+  (check-type name (or cons symbol))
+  (let* ((ulist (ulist-to-plist args (defstep-keywords)))
+         (in (getf ulist :in))
+         (out (getf ulist :out))
+         (step `(:name ,name
+                 :struct (:in ,in
+                          :out ,out))))
+    step
+    (eval `(step/check-type ',(getf step :struct) ',name))))
+;;
 (defparameter *KIMIA-STEPS* '())
 
 (defmacro wrap-input-script (&rest arg)

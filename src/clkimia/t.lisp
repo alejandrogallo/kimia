@@ -405,6 +405,10 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
     *(std::vector< double >*)v_of_cldouble(cl_getf(2, o, c_string_to_object(\":LENS\")))
   };
 }")
+(check-type '"hello" (choice string ("hello" "world")))
+(check-type '5 (choice integer (1 3 5)))
+(check-type '5.5 (choice single-float (1.0 3.0 5.5)))
+(check-type '5.5d0 (choice double-float (1.0d0 3.0d0 5.5d0)))
 (assert (typep '(:name :mode
                  :type (member :binary :text)
                  :default :binary
@@ -473,6 +477,23 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
                             :mode 456.5)
                        :out (:tensor #(4 6 8)))
                      '(struct (tensor-reader integer)))))
+
+(make-step
+ '(tensor-reader integer)
+ :in
+ :file "tensor.dat"
+ :mode 505
+ :out
+ :tensor #(5 6 8))
+
+(defvar *a* 65)
+
+($ '(tensor-reader integer)
+ :in
+ :file "tensor.dat"
+ :mode 505
+ :out
+ :tensor #(5 6 8))
 ;; (mk-step
 ;;  'Tensor-Reader
 ;;  :in

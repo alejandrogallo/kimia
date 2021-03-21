@@ -1458,6 +1458,31 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
 }")
 #+end_src
 
+*** Choice
+
+#+begin_src lisp :noweb-ref kimia.codegen :results none
+(deftype choice (type elements)
+  `(and ,type
+    (satisfies ,(lambda (x) (typep elements 'cons)))
+    (satisfies ,(lambda (x) (every (lambda (x) (typep x type)) elements)))
+    (satisfies ,(lambda (x) (member x elements :test #'equal)))))
+
+(defequiv :c++ (choice type elements)
+  :translate (lambda (ty) (translate :c++ (cadr ty)))
+  :caster-name (lambda (ty) (caster-name :c++ (cadr ty)))
+  :subtypes (lambda (ty) `(,(cadr ty)))
+  :caster-header (lambda (ty) (caster-signature :c++ (cadr ty)))
+  :caster-body (lambda (ty) (caster-body :c++ (cadr ty))))
+#+end_src
+
+**** Tests
+#+begin_src lisp :eval no :noweb-ref test-kimia
+(check-type '"hello" (choice string ("hello" "world")))
+(check-type '5 (choice integer (1 3 5)))
+(check-type '5.5 (choice single-float (1.0 3.0 5.5)))
+(check-type '5.5d0 (choice double-float (1.0d0 3.0d0 5.5d0)))
+#+end_src
+
 
 *** TODO The enums
     
@@ -1976,6 +2001,23 @@ An instantiation of a step should be of the form
                             :mode 456.5)
                        :out (:tensor #(4 6 8)))
                      '(struct (tensor-reader integer)))))
+
+(make-step
+ '(tensor-reader integer)
+ :in
+ :file "tensor.dat"
+ :mode 505
+ :out
+ :tensor #(5 6 8))
+
+(defvar *a* 65)
+
+($ '(tensor-reader integer)
+ :in
+ :file "tensor.dat"
+ :mode 505
+ :out
+ :tensor #(5 6 8))
 #+end_src
 
 *** Making steps
@@ -1983,20 +2025,17 @@ An instantiation of a step should be of the form
 And we just need to create a function to easier create
 steps
 
-#+begin_src lisp :results none :noweb-ref kimia.types
+#+begin_src lisp :results none :noweb-ref kimia.step
 (defun make-step (name &rest args)
   (check-type name (or cons symbol))
   (let* ((ulist (ulist-to-plist args (defstep-keywords)))
          (in (getf ulist :in))
          (out (getf ulist :out))
-         (type)
-         (step))
-    (setq type name)
-    (setq step `(:name ,name
-                 :struct ((:in ,in)
-                          (:out ,out))))
-    ;; (eval `(check-step-type ,step))
-    step))
+         (step `(:name ,name
+                 :struct (:in ,in
+                          :out ,out))))
+    step
+    (eval `(step/check-type ',(getf step :struct) ',name))))
  #+end_src
 
  and we can create a step in the following manner
