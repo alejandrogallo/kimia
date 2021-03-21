@@ -50,7 +50,7 @@ std::string wrapInProgn(const std::string &code) {
 
 namespace lisp {
 
-  cl_object toLispObject(const std::string &s) {
+  cl_object fromStr(const std::string &s) {
     return c_string_to_object(s.c_str());
   }
 
@@ -173,66 +173,30 @@ int main(int argc, char **argv) {
   wrappedContents += contents;
   wrappedContents += ")\n";
 
-
   lisp::initialize(argc, argv);
   //cl_object output(lisp::eval_lisp(wrappedContents.c_str()));
 
-  std::vector<size_t> ids;
-  cl_object i(lisp::eval_lisp("51"));
-  int pi(*(int*)cl_object_to_int(i, ids));
-  std::cout << pi << std::endl;
+  cl_object output;
 
-  cl_object output, env, value;
-
+  //std::cout << wrappedContents << std::endl;
   output = cl_safe_eval(c_string_to_object(wrappedContents.c_str()), Cnil, Cnil);
-  //output = cl_safe_eval(c_string_to_object(contents.c_str()), env, value);
-  //output = cl_safe_eval(c_string_to_object(prognContents.c_str()), Cnil, Cnil);
-  //std::cout << "env: " << describeEclObject(env) << std::endl;
-  // std::cout << "value: " << describeEclObject(value) << std::endl;
+  //output = cl_safe_eval(c_string_to_object(contents.c_str()), Cnil, Cnil);
+ // output = cl_safe_eval(c_string_to_object(prognContents.c_str()), Cnil, Cnil);
 
-  std::cout << "GOT: \n";
-  cl_print(1, output);
-  cl_print(1, cl_car(output));
-  cl_print(1, cl_car(cl_car(output)));
-  cl_print(1, cl_getf(2, cl_car(output), lisp::eval_lisp(":name")));
+  //std::cout << "OUTPUT: " << std::endl;
+  //cl_print(1, output);
+  cl_object currentStep;
 
-  std::cout << "\n<<<GOT>>>" << std::endl;
-
-  // ecl_to_double
-  //std::cout << describeEclObject(env) << std::endl;
-  //std::cout << describeEclObject(value) << std::endl;
-
-  if (output == ECL_NIL) {
-    std::cout << "c++: NIL we are fucked" << std::endl;
-  } else if (ECL_LISTP(output)) {
-    std::cout << "c++: LISTP" << std::endl;
-  } else if (ECL_CONSP(output)) {
-    std::cout << "c++: CONSP" << std::endl;
-  } else if (ECL_PATHNAMEP(output)) {
-    std::cout << "c++: IT IS A FUCKING PATHNAME??" << std::endl;
-  } else if (ecl_t_of(output) == t_string) {
-    std::cout << "c++: string" << std::endl;
-    std::cout << describeEclObject(output) << std::endl;
-    std::wstring a((wchar_t*)output->string.self);
-    std::wcout << a << std::endl;
-  } else if (ecl_t_of(output) == t_symbol) {
-    std::cout << "c++: symbol" << std::endl;
-    std::cout << (size_t)((output->symbol.name)->d.t) << std::endl;
-    std::cout << describeEclObject(output) << std::endl;
-    std::cout << describeEclObject(output->symbol.name) << std::endl;
-    std::cout << describeEclObject(output->symbol.value) << std::endl;
-    std::cout << output->symbol.name->base_string.self << std::endl;
-  } else {
-    std::cout << "c++         : DONT KNOW" << std::endl;
-    std::cout << "appartenly  : " << describeEclObject(output) << std::endl;
+  while (!Null(output)) {
+    std::cout << "\nRunning STEP\n" << std::endl;
+    currentStep = cl_car(output);
+    output = cl_cdr(output);
+    auto runner = (std::string*)clstr(cl_getf(2, currentStep, lisp::fromStr(":run-name-c++")));
+    std::cout << "\tFunction name: " <<  *runner << std::endl;
+    cl_print(1, currentStep);
   }
 
-  SumVector<double> s {{{5.5}}, {8.8}};
-  std::cout << s.out.sum << std::endl;
-
-  // cl_object number(lisp::eval_lisp("(makeanumber)"));
-  // std::cout << "The number is " << number->SF.SFVAL << std::endl;
-  // std::cout << t_pathname << std::endl;
+  std::cout << "c++ sum vector" << std::endl;
 
   cl_shutdown();
 }

@@ -496,6 +496,12 @@ size_t s_monster_struct_with_clint_and_cldouble_and_clfloat (const cl_object o){
  :out
  :tensor #(5 6 8))
 
+(assert-equal (caster-name :c++ '(struct (tensor-reader integer)))
+              "s_tensor_reader_with_clint")
+(assert-equal (step/caster-name :c++ '(tensor-reader integer))
+               "s_tensor_reader_with_clint")
+
+
 ($ '(tensor-reader integer)
  :in
  :file "file.dat"

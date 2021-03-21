@@ -931,6 +931,9 @@ return POINTER_DATABASE[*name];"
                               :out ,out
                               :run ,run))
        (push ',spec-var-name *KIMIA-STEP-SPECS*))))
+(defun step/caster-name (lang name)
+  (caster-name lang `(struct ,name)))
+
 (defun make-step (name &rest args)
   (check-type name (or cons symbol))
   (let* ((ulist (ulist-to-plist args (defstep-keywords)))
@@ -938,7 +941,7 @@ return POINTER_DATABASE[*name];"
          (out (getf ulist :out))
          (run (getf ulist :run))
          (step `(:name ,name
-                 :caster-name-c++ ,(caster-name :c++ `(struct ,name))
+                 ;:caster-name-c++ ,(step/caster-name :c++ name)
                  :run-name-c++ ,(step/run-function-name :c++ name)
                  :struct (:in ,in
                           :out ,out))))

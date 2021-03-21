@@ -2107,6 +2107,12 @@ An instantiation of a step should be of the form
  :out
  :tensor #(5 6 8))
 
+(assert-equal (caster-name :c++ '(struct (tensor-reader integer)))
+              "s_tensor_reader_with_clint")
+(assert-equal (step/caster-name :c++ '(tensor-reader integer))
+               "s_tensor_reader_with_clint")
+
+
 ($ '(tensor-reader integer)
  :in
  :file "file.dat"
@@ -2121,6 +2127,9 @@ And we just need to create a function to easier create
 steps
 
 #+begin_src lisp :results none :noweb-ref kimia.step
+(defun step/caster-name (lang name)
+  (caster-name lang `(struct ,name)))
+
 (defun make-step (name &rest args)
   (check-type name (or cons symbol))
   (let* ((ulist (ulist-to-plist args (defstep-keywords)))
@@ -2128,7 +2137,7 @@ steps
          (out (getf ulist :out))
          (run (getf ulist :run))
          (step `(:name ,name
-                 :caster-name-c++ ,(caster-name :c++ `(struct ,name))
+                 ;:caster-name-c++ ,(step/caster-name :c++ name)
                  :run-name-c++ ,(step/run-function-name :c++ name)
                  :struct (:in ,in
                           :out ,out))))

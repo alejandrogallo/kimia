@@ -15,3 +15,4 @@
 (step/instantiate '(sum-vector double-float))
 (step/instantiate '(sum-vector single-float))
 (step/instantiate '(sum-vector integer))
+(step/instantiate '(sum-vector string))
