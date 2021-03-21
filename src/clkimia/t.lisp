@@ -303,6 +303,17 @@ size_t ccldouble (const cl_object o){
 (assert-not (typep '(struct (Uttu integer))
                    'struct-spec))
 
+;; struct/get-ungeneric-name
+(assert-eq (struct/get-ungeneric-name '(struct (Uttu integer))) 'Uttu)
+(assert-eq (struct/get-ungeneric-name '(struct Uttu)) 'Uttu)
+(assert-eq (struct/get-ungeneric-name '(struct nil)) nil)
+
+;; struct/get-generic-name
+(assert-equal (struct/get-generic-name '(struct (Uttu integer)))
+              '(struct (Uttu (g F))))
+(assert-equal (struct/get-generic-name '(struct tensor-reader-double))
+              '(struct tensor-reader-double))
+
 ;;;;; CODE GENERATION
 (assert-equal
  (translate :c++ '(struct (uttu string)))

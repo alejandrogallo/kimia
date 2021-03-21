@@ -83,6 +83,23 @@
         ((eq first :in) (consume-in-out rest tail))
         ((eq lst '()) `(,(reverse tail) ,rest))
         (t (consume-in-out rest (cons first tail)))))))
+
+
+;; from http://cl-cookbook.sourceforge.net/strings.html
+(defun replace-all (string part replacement &key (test #'char=))
+  "Returns a new string in which all the occurences of the part
+is replaced with replacement."
+  (with-output-to-string (out)
+    (loop with part-length = (length part)
+          for old-pos = 0 then (+ pos part-length)
+          for pos = (search part string
+                            :start2 old-pos
+                            :test test)
+          do (write-string string out
+                           :start old-pos
+                           :end (or pos (length string)))
+          when pos do (write-string replacement out)
+            while pos)))
 (defun endl () (format nil "~%"))
 
 (defun c++-type-name (thing)
@@ -527,6 +544,32 @@ return POINTER_DATABASE[*name];"
     (let ((gvars (struct-spec-generic-vars spec)))
       (remove-if-not #'generic-p gvars)))
 
+  (defun struct/get-ungeneric-name (ty)
+    (if (struct/name-generic-p ty)
+        (caadr ty)
+        (cadr ty)))
+
+  (defun struct/get-generic-name (ty)
+    (check-type ty (or struct-spec struct-identifier))
+    (let* ((spec (struct-get-spec ty))
+           (is-unnamed (struct-unnamed-p ty))
+           (is-generic (struct/name-generic-p spec))
+           (gvars (struct-spec-generic-vars spec))
+           (safe-gvars (mapcar (lambda (g)
+                                 (if (generic-p g)
+                                     g
+                                     `(g ,g)))
+                               gvars))
+           (subst-list (pairlis safe-gvars gvars)))
+      (if (or is-unnamed (not is-generic))
+          ty
+          `(struct (,(struct/get-ungeneric-name ty)
+                    ,@safe-gvars)))))
+
+  (defun struct/name-generic-p (ty)
+    (check-type ty (or struct-spec struct-identifier))
+    (typep (cadr ty) 'cons))
+
   (defun translate-struct-c++ (ty)
     (let* ((ty-name (struct-spec-name ty))
            (name (if ty-name (c++-type-name ty-name) ""))
@@ -785,37 +828,41 @@ return POINTER_DATABASE[*name];"
 (deftype step-setting-spec ()
   '(and cons
     (satisfies step-setting-spec-p)))
-(defun defstep-keywords ()
-  '(:in :out :run))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun defstep-keywords ()
+    '(:in :out :run)))
 (defun step-setting-typep (setting-pair setting-spec-list)
   (let* ((key (car setting-pair))
          (value (getf setting-pair key))
          (spec (find key setting-spec-list :key (lambda (k) (getf k :name)))))
     (typep value (getf spec :type))))
-(defun step/spec-to-struct-spec (step-name in out)
-  (let ((in-struct `(struct nil
-                            ,(mapcar
-                              (lambda (kp)
-                                `(,(getf kp :name)
-                                  ,(getf kp :type)))
-                              in)))
-        (out-struct `(struct nil
-                             ,(mapcar
-                               (lambda (kp)
-                                 `(,(getf kp :name)
-                                   ,(getf kp :type)))
-                               out))))
-    `(struct ,step-name ((:in (const ,in-struct))
-                         (:out ,out-struct)))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun step/spec-to-struct-spec (step-name in out)
+    (let ((in-struct `(struct nil
+                              ,(mapcar
+                                (lambda (kp)
+                                  `(,(getf kp :name)
+                                    ,(getf kp :type)))
+                                in)))
+          (out-struct `(struct nil
+                               ,(mapcar
+                                 (lambda (kp)
+                                   `(,(getf kp :name)
+                                     ,(getf kp :type)))
+                                 out))))
+      `(struct ,step-name ((:in (const ,in-struct))
+                           (:out ,out-struct))))))
 
-(defun step/get-name (generic-name)
-  (etypecase generic-name
-            (symbol generic-name)
-            (cons (car generic-name))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun step/get-name (generic-name)
+    (etypecase generic-name
+      (symbol generic-name)
+      (cons (car generic-name))))
 
-(defun step/get-spec-symbol (name)
-  (intern (format nil "~@:(~a-step-spec~)" (step/get-name name))))
-(defun step/get-spec (name) (eval (step/get-spec-symbol name)))
+  (defun step/get-spec-symbol (name)
+    (intern (format nil "~@:(~a-step-spec~)" (step/get-name name))))
+  (defun step/get-spec (name)
+    (eval (step/get-spec-symbol name))))
 (defun step/get-struct-spec (step-name)
   (let ((struct-identifier `(struct ,step-name)))
     (struct-get-spec struct-identifier)))
@@ -827,6 +874,20 @@ return POINTER_DATABASE[*name];"
 (defun step/check-type (thing step-name)
   (let ((spec (step/get-struct-expanded-spec step-name)))
     (eval `(check-type ',thing ,spec))))
+
+(defun step/is-generic (step-name)
+  (let ((spec (step/get-struct-expanded-spec step-name)))
+    (struct-spec-generic-p spec)))
+
+(defun step/translate-struct (lang step-name)
+  (let* ((spec (step/get-struct-spec step-name))
+         (gvars (struct-spec-generic-vars spec))
+         (safe-gvars (mapcar (lambda (g)
+                               (if (generic-p g)
+                                   g `(g ,g))) gvars))
+         (generic-name (struct/get-generic-name spec)))
+    (translate lang generic-name)
+    ))
 
 ;; todo generalize out of c++
 (defun step/run-function-name (lang name)
@@ -842,7 +903,15 @@ return POINTER_DATABASE[*name];"
                               (cdr name))))
         ((or string symbol) (fun-format run))))))
 
-(defparameter *KIMIA-TYPES* '())
+(defparameter *KIMIA-STEP-SPECS* '()
+  "List of all defined step specs in the current session.")
+
+(defparameter *KIMIA-STEP-INSTANTIATIONS* '()
+  "List of all instantiated steps in the current session.")
+
+(defun step/instantiate (step-identifier)
+  (push step-identifier *kimia-step-instantiations*))
+
 (defmacro defstep (name &rest args)
   (check-type name (or symbol cons))
   (let* ((step-name (step/get-name name))
@@ -861,7 +930,7 @@ return POINTER_DATABASE[*name];"
                               :in ,in
                               :out ,out
                               :run ,run))
-       (push ',step-name *KIMIA-TYPES*))))
+       (push ',spec-var-name *KIMIA-STEP-SPECS*))))
 (defun make-step (name &rest args)
   (check-type name (or cons symbol))
   (let* ((ulist (ulist-to-plist args (defstep-keywords)))

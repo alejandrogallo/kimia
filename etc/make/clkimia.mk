@@ -25,7 +25,7 @@ CLKIMIA_BUILD_SOURCES = $(CLKIMIA_BUILD_SOURCES_MAIN_LISP)
 CLKIMIA_BUILD_OBJS = $(CLKIMIA_BUILD_SOURCES_MAIN_O)
 CLKIMIA_BUILD_FASC = $(CLKIMIA_BUILD_SOURCES_MAIN_FASC)
 
-CLKIMIA_STEPS_HEADERS = $(patsubst %.lisp,%.h,$(CLKIMIA_STEPS))
+CLKIMIA_STEPS_HEADERS = $(patsubst %.lisp,%.hpp,$(CLKIMIA_STEPS))
 
 define ECL_LISP_TO_O
 $(ECL_BIN) --eval "(require 'cmp)" \
@@ -50,13 +50,10 @@ $(ECL_BIN) --eval "(require 'cmp)" \
 endef
 
 
-%.h: %.lisp $(CLKIMIA_BUILD_FASC)
-	echo "#pragma once" > $@
-	$(ECL_BIN) --load $(CLKIMIA_BUILD_FASC) \
-		--eval "(in-package :kimia.types)" \
-		--eval "(princ (define-c++ tensor-reader-spec))" \
-		--eval "(si:quit)" \
-		| sed "/^;/d" >> $@
+%.hpp: %.lisp
+	(cd src/clkimia/; \
+		$(ECL_BIN) --shell step-spec-to-header.lisp \
+		-i $(abspath $<) -o $(abspath $@))
 
 %.o: %.lisp
 	$(call ECL_LISP_TO_O,$<)

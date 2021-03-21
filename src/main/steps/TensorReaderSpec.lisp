@@ -1,6 +1,6 @@
 (in-package :kimia)
 
-(defstep tensor-reader-spec
+(defstep tensor-reader
   :in
   (:name :file
    :type string

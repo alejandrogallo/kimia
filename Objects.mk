@@ -2,6 +2,7 @@ SRC_FILES= \
 main/Kimia.cxx \
 
 CLKIMIA_STEPS = \
+src/main/steps/SumVectorSpec.lisp \
 #src/main/steps/TensorReaderSpec.lisp \
 
 CLKIMIA_SOURCES = \
