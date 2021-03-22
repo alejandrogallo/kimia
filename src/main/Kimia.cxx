@@ -81,87 +81,6 @@ namespace lisp {
   }
 }
 
-std::string
-describeEclObject(cl_object o) {
-  switch (ecl_t_of(o)) {
-  case t_start:
-    return "start";
-  case t_list:
-    return "list";
-  case t_character:
-    return "character";
-  case t_fixnum:
-    return "fixnum";
-  case t_bignum:
-    return "bignum";
-  case t_ratio:
-    return "ratio";
-  case t_singlefloat:
-    return "singlefloat";
-  case t_doublefloat:
-    return "doublefloat";
-  case t_longfloat:
-    return "longfloat";
-  case t_complex:
-    return "complex";
-  case t_last_number:
-    return "last_number";
-  case t_symbol:
-    return "symbol";
-  case t_package:
-    return "package";
-  case t_hashtable:
-    return "hashtable";
-  case t_array:
-    return "array";
-  case t_vector:
-    return "vector";
-  case t_string:
-    return "string";
-  case t_base_string:
-    return "base_string";
-  case t_bitvector:
-    return "bitvector";
-  case t_stream:
-    return "stream";
-  case t_random:
-    return "random";
-  case t_readtable:
-    return "readtable";
-  case t_pathname:
-    return "pathname";
-  case t_bytecodes:
-    return "bytecodes";
-  case t_bclosure:
-    return "bclosure";
-  case t_cfun:
-    return "cfun";
-  case t_cfunfixed:
-    return "cfunfixed";
-  case t_cclosure:
-    return "cclosure";
-  case t_structure:
-    return "structure";
-  case t_codeblock:
-    return "codeblock";
-  case t_foreign:
-    return "foreign";
-  case t_frame:
-    return "frame";
-  case t_weak_pointer:
-    return "weak_pointer";
-  case t_end:
-    return "end";
-  case t_other:
-    return "other";
-  case t_contiguous:
-    return "contiguous";
-  default:
-    return "Unknown";
-  }
-}
-
-
 int main(int argc, char **argv) {
   std::ifstream ifs("input.lisp");
   std::string contents;
@@ -174,45 +93,41 @@ int main(int argc, char **argv) {
   wrappedContents += ")\n";
 
   lisp::initialize(argc, argv);
-  //cl_object output(lisp::eval_lisp(wrappedContents.c_str()));
+  setupRunnerDatabase();
 
-  cl_object output;
-
-  //std::cout << wrappedContents << std::endl;
+  cl_object output, currentStep;
   output = cl_safe_eval(c_string_to_object(wrappedContents.c_str()), Cnil, Cnil);
-  //output = cl_safe_eval(c_string_to_object(contents.c_str()), Cnil, Cnil);
- // output = cl_safe_eval(c_string_to_object(prognContents.c_str()), Cnil, Cnil);
 
-  //std::cout << "OUTPUT: " << std::endl;
   //cl_print(1, output);
-  cl_object currentStep;
-
   while (!Null(output)) {
     std::cout << "\nRunning STEP\n" << std::endl;
     currentStep = cl_car(output);
     output = cl_cdr(output);
-    auto runner = (std::string*)clstr(cl_getf(2, currentStep, lisp::fromStr(":run-name-c++")));
+    auto runner
+      = (std::string*)clstr(cl_getf(2,
+                                    currentStep,
+                                    lisp::fromStr(":run-name-c++")));
+    cl_object _struct = cl_getf(2, currentStep, lisp::fromStr(":struct"));
     std::cout << "\tFunction name: " <<  *runner << std::endl;
-    cl_print(1, currentStep);
+
+    // TODO: fix getting caster directly
+    auto fun = (void (*)(size_t))DATABASE[*runner];
+    auto caster = (size_t (*)(cl_object))RUNNER_TO_CASTER[*runner];
+    assert(DATABASE.find(*runner) != DATABASE.end());
+    assert(RUNNER_TO_CASTER.find(*runner) != RUNNER_TO_CASTER.end());
+    fun(caster(_struct));
+    //cl_print(1, currentStep);
+    //cl_print(1, _struct);
   }
 
   std::cout << "c++ sum vector" << std::endl;
 
   cl_shutdown();
 
-  using FUN_TYPE = void (*)(void);
-  setupRunnerDatabase();
-  FUN_TYPE lala = (FUN_TYPE)POINTER_DATABASE["fuck<double>"];
-  lala();
-  int iii =0b1111111111111111111111111111111;
-  ((void (*)(int&))POINTER_DATABASE["sayHy"])(iii);
-  //(*(void (*)(void) *)POINTER_DATABASE["fuck<double>"])();
-
   SumVector<double> vv = {{{8.8}}, {98}};
-  //runSumVector<double>(vv);
-  //std::cout << vv.out.sum << std::endl;
+  assert(DATABASE["runSumVector<double>"]);
   ((void (*)(SumVector<double>&))
-   POINTER_DATABASE["runSumvector<double>"])(vv);
+   DATABASE["runSumVector<double>"])(vv);
   std::cout << vv.out.sum << std::endl;
 
 }

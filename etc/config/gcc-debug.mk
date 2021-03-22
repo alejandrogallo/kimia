@@ -14,7 +14,7 @@ KIMIA_OPTIONS = \
 -DDEBUG
 
 # optimization options (only for compiling and linking)
-OPTIMIZE = -O0 -g -fno-lto
+OPTIMIZE = -O1 -g -fno-lto
 
 CTF_CONFIG_FLAGS = CXX=$(CXX) \
                    AR=gcc-ar \

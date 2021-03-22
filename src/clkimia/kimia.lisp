@@ -958,8 +958,8 @@ return POINTER_DATABASE[*name];"
        (format t "~%LISP::START evaluating KIMIA script~%")
        ,@arg
        (format t "~%LISP::DONE evaluating KIMIA~%")
-       kimia::*KIMIA-STEPS*)))
+       (reverse kimia::*KIMIA-STEPS*))))
 
 (defmacro $ (&rest args)
   (let ((step (eval `(make-step ,@args))))
-        `(setf *KIMIA-STEPS* '(,@*KIMIA-STEPS* ,step))))
+        `(push ',step *kimia-steps*)))

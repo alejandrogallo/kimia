@@ -4,4 +4,4 @@
 #include <steps/SumVectorSpec.hpp>
 
 template <typename F>
-void runSumVector(SumVector<F>&);
+void runSumVector(SumVector<F>*);

@@ -6,7 +6,8 @@
 #include<ecl/ecl.h>
 #include "/home/gallo/software/kimia/src/main/steps/SumVectorSpec.hpp"
 #include "/home/gallo/software/kimia/src/main/steps/SumVector.hpp"
-std::map<std::string, size_t> POINTER_DATABASE;
+std::map<std::string, size_t> DATABASE;
+std::map<std::string, size_t> RUNNER_TO_CASTER;
 
 size_t clstr (const cl_object o){
   const size_t dimension(o->base_string.dim)
@@ -151,15 +152,15 @@ size_t s_sum_vector_with_cldouble (const cl_object o){
 
 void setupRunnerDatabase(void) {
   /* (SUM-VECTOR STRING) */
-  POINTER_DATABASE["runSumVector<std::string>"] = (size_t)&runSumVector<std::string>;
-  POINTER_DATABASE["s_sum_vector_with_clstr"] = (size_t)&s_sum_vector_with_clstr;
+  DATABASE["runSumVector<std::string>"] = (size_t)&runSumVector<std::string>;
+  RUNNER_TO_CASTER["runSumVector<std::string>"] = (size_t)s_sum_vector_with_clstr;
   /* (SUM-VECTOR INTEGER) */
-  POINTER_DATABASE["runSumVector<int>"] = (size_t)&runSumVector<int>;
-  POINTER_DATABASE["s_sum_vector_with_clint"] = (size_t)&s_sum_vector_with_clint;
+  DATABASE["runSumVector<int>"] = (size_t)&runSumVector<int>;
+  RUNNER_TO_CASTER["runSumVector<int>"] = (size_t)s_sum_vector_with_clint;
   /* (SUM-VECTOR SINGLE-FLOAT) */
-  POINTER_DATABASE["runSumVector<float>"] = (size_t)&runSumVector<float>;
-  POINTER_DATABASE["s_sum_vector_with_clfloat"] = (size_t)&s_sum_vector_with_clfloat;
+  DATABASE["runSumVector<float>"] = (size_t)&runSumVector<float>;
+  RUNNER_TO_CASTER["runSumVector<float>"] = (size_t)s_sum_vector_with_clfloat;
   /* (SUM-VECTOR DOUBLE-FLOAT) */
-  POINTER_DATABASE["runSumVector<double>"] = (size_t)&runSumVector<double>;
-  POINTER_DATABASE["s_sum_vector_with_cldouble"] = (size_t)&s_sum_vector_with_cldouble;
+  DATABASE["runSumVector<double>"] = (size_t)&runSumVector<double>;
+  RUNNER_TO_CASTER["runSumVector<double>"] = (size_t)s_sum_vector_with_cldouble;
 }

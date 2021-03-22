@@ -70,6 +70,7 @@
   (format t "~{~&#include<~(~a~)>~}" *c++-headers*)
   (format t "~{~&#include \"~a\"~}" *immediate-headers*)
   (format t "~&~&std::map<std::string, size_t> DATABASE;")
+  (format t "~&~&std::map<std::string, size_t> RUNNER_TO_CASTER;")
   (dolist (name *structs-to-export*)
     (let* ((identifier `(struct ,name))
            (ty-name (struct-spec-name identifier))
@@ -84,7 +85,8 @@
     (format t "~&  /* ~s */" name)
     (format t "~&  DATABASE[\"~a\"] = (size_t)&~:*~a;"
             (step/run-function-name :c++ name))
-    (format t "~&  DATABASE[\"~a\"] = (size_t)&~:*~a;"
+    (format t "~&  RUNNER_TO_CASTER[\"~a\"] = (size_t)~a;"
+            (step/run-function-name :c++ name)
             (step/caster-name :c++ name))
     )
   (format t "~&}")
