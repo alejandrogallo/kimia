@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
   cl_shutdown();
 
   using FUN_TYPE = void (*)(void);
-  setupFunctions();
+  setupRunnerDatabase();
   FUN_TYPE lala = (FUN_TYPE)POINTER_DATABASE["fuck<double>"];
   lala();
   int iii =0b1111111111111111111111111111111;

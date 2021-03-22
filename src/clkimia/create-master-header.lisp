@@ -69,11 +69,24 @@
                                                      :if-exists :supersede)
   (format t "~{~&#include<~(~a~)>~}" *c++-headers*)
   (format t "~{~&#include \"~a\"~}" *immediate-headers*)
-  (format t "~&~&std::map<std::string, size_t> POINTER_DATABASE;")
+  (format t "~&~&std::map<std::string, size_t> DATABASE;")
   (dolist (name *structs-to-export*)
     (let* ((identifier `(struct ,name))
            (ty-name (struct-spec-name identifier))
            (spec (struct-get-expanded-spec identifier))
            (generic-spec (struct-get-spec `(struct ,ty-name))))
       ;(print-translate-generic-struct identifier)
-      (translate-type-dependencies spec))))
+      (translate-type-dependencies spec)))
+
+  ;; setup function database
+  (format t "~&void setupRunnerDatabase(void) {")
+  (dolist (name *structs-to-export*)
+    (format t "~&  /* ~s */" name)
+    (format t "~&  DATABASE[\"~a\"] = (size_t)&~:*~a;"
+            (step/run-function-name :c++ name))
+    (format t "~&  DATABASE[\"~a\"] = (size_t)&~:*~a;"
+            (step/caster-name :c++ name))
+    )
+  (format t "~&}")
+
+  )

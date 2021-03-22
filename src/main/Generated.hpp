@@ -8,8 +8,6 @@
 #include "/home/gallo/software/kimia/src/main/steps/SumVector.hpp"
 std::map<std::string, size_t> POINTER_DATABASE;
 
-
-
 size_t clstr (const cl_object o){
   const size_t dimension(o->base_string.dim)
              , charSize = ECL_EXTENDED_STRING_P(o) ? 4 : 1
@@ -151,16 +149,17 @@ size_t s_sum_vector_with_cldouble (const cl_object o){
   };
 }
 
-void sayHy(int &a) {
-  std::cout << a << std::endl;
-}
-
-template <typename F>
-void fuck(F &d){std::cout << "fuck" << std::endl;};
-
-void setupFunctions(void) {
-  POINTER_DATABASE["fuck<double>"] = (size_t)(void (*)(void))&fuck<double>;
-  POINTER_DATABASE["sayHy"] = (size_t)(void (*)(int&))&sayHy;
-  POINTER_DATABASE["runSumvector<double>"]
-    = (size_t)(void (*)(SumVector<double>&))&runSumVector<double>;
+void setupRunnerDatabase(void) {
+  /* (SUM-VECTOR STRING) */
+  POINTER_DATABASE["runSumVector<std::string>"] = (size_t)&runSumVector<std::string>;
+  POINTER_DATABASE["s_sum_vector_with_clstr"] = (size_t)&s_sum_vector_with_clstr;
+  /* (SUM-VECTOR INTEGER) */
+  POINTER_DATABASE["runSumVector<int>"] = (size_t)&runSumVector<int>;
+  POINTER_DATABASE["s_sum_vector_with_clint"] = (size_t)&s_sum_vector_with_clint;
+  /* (SUM-VECTOR SINGLE-FLOAT) */
+  POINTER_DATABASE["runSumVector<float>"] = (size_t)&runSumVector<float>;
+  POINTER_DATABASE["s_sum_vector_with_clfloat"] = (size_t)&s_sum_vector_with_clfloat;
+  /* (SUM-VECTOR DOUBLE-FLOAT) */
+  POINTER_DATABASE["runSumVector<double>"] = (size_t)&runSumVector<double>;
+  POINTER_DATABASE["s_sum_vector_with_cldouble"] = (size_t)&s_sum_vector_with_cldouble;
 }

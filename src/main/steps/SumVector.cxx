@@ -1,5 +1,6 @@
 #include <steps/SumVector.hpp>
 #include <iostream>
+#include <string>
 
 template <typename F>
 void runSumVector(SumVector<F> &s) {
@@ -9,3 +10,4 @@ void runSumVector(SumVector<F> &s) {
 template void runSumVector<int>(SumVector<int>&);
 template void runSumVector<float>(SumVector<float>&);
 template void runSumVector<double>(SumVector<double>&);
+template<> void runSumVector<std::string>(SumVector<std::string>& d) {}
