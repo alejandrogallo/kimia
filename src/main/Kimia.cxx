@@ -199,5 +199,20 @@ int main(int argc, char **argv) {
   std::cout << "c++ sum vector" << std::endl;
 
   cl_shutdown();
-}
 
+  using FUN_TYPE = void (*)(void);
+  setupFunctions();
+  FUN_TYPE lala = (FUN_TYPE)POINTER_DATABASE["fuck<double>"];
+  lala();
+  int iii =0b1111111111111111111111111111111;
+  ((void (*)(int&))POINTER_DATABASE["sayHy"])(iii);
+  //(*(void (*)(void) *)POINTER_DATABASE["fuck<double>"])();
+
+  SumVector<double> vv = {{{8.8}}, {98}};
+  //runSumVector<double>(vv);
+  //std::cout << vv.out.sum << std::endl;
+  ((void (*)(SumVector<double>&))
+   POINTER_DATABASE["runSumvector<double>"])(vv);
+  std::cout << vv.out.sum << std::endl;
+
+}

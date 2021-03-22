@@ -5,7 +5,10 @@
 #include<cstdlib>
 #include<ecl/ecl.h>
 #include "/home/gallo/software/kimia/src/main/steps/SumVectorSpec.hpp"
+#include "/home/gallo/software/kimia/src/main/steps/SumVector.hpp"
 std::map<std::string, size_t> POINTER_DATABASE;
+
+
 
 size_t clstr (const cl_object o){
   const size_t dimension(o->base_string.dim)
@@ -148,3 +151,16 @@ size_t s_sum_vector_with_cldouble (const cl_object o){
   };
 }
 
+void sayHy(int &a) {
+  std::cout << a << std::endl;
+}
+
+template <typename F>
+void fuck(F &d){std::cout << "fuck" << std::endl;};
+
+void setupFunctions(void) {
+  POINTER_DATABASE["fuck<double>"] = (size_t)(void (*)(void))&fuck<double>;
+  POINTER_DATABASE["sayHy"] = (size_t)(void (*)(int&))&sayHy;
+  POINTER_DATABASE["runSumvector<double>"]
+    = (size_t)(void (*)(SumVector<double>&))&runSumVector<double>;
+}
